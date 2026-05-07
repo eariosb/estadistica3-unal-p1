@@ -1,0 +1,46 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# Dockerfile.execute — Parche para agregar el endpoint /execute
+# al contenedor R+Plumber existente.
+#
+# USO: Este Dockerfile extiende la imagen base que ya tienes.
+# Ajusta "FROM tu-imagen-r-plumber:latest" con el nombre real de tu imagen.
+# ══════════════════════════════════════════════════════════════════════════════
+
+FROM tu-imagen-r-plumber:latest
+
+# ── Instalar paquetes R adicionales necesarios ────────────────────────────────
+RUN Rscript -e " \
+  install.packages(c( \
+    'forecast', \
+    'ggplot2', \
+    'tseries', \
+    'zoo', \
+    'xts', \
+    'TTR', \
+    'jsonlite', \
+    'rlang', \
+    'plumber' \
+  ), repos='https://cloud.r-project.org', quiet=TRUE) \
+"
+
+# ── Copiar el endpoint al directorio de la API ────────────────────────────────
+COPY execute_endpoint.R /app/R/execute_endpoint.R
+
+# ── Límites de recursos del contenedor (en docker-compose.yml) ────────────────
+# Se recomienda configurar en docker-compose.yml:
+#
+# services:
+#   r-backend:
+#     image: tu-imagen-r-plumber:execute
+#     deploy:
+#       resources:
+#         limits:
+#           memory: 1G       # máximo 1 GB de RAM por contenedor
+#           cpus: "1.0"      # máximo 1 CPU
+#     environment:
+#       R_BACKEND_SECRET: "tu-secreto-compartido-con-nextjs"
+#     ulimits:
+#       nproc: 50            # máximo 50 procesos hijo
+#       nofile:
+#         soft: 64
+#         hard: 128
