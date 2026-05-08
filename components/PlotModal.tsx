@@ -302,7 +302,7 @@ export function PlotModal({ plots, initialIndex = 0, onClose }: PlotModalProps) 
             ["0", "Resetear"],
             plots.length > 1 ? ["←→", "Navegar"] : null,
           ]
-            .filter(Boolean)
+            .filter((item): item is [string, string] => item !== null)
             .map(([key, label]) => (
               <span key={key} className="text-xs text-slate-600 font-mono">
                 <kbd className="px-1 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 text-[10px]">
@@ -314,5 +314,6 @@ export function PlotModal({ plots, initialIndex = 0, onClose }: PlotModalProps) 
         </div>
       </div>
     </div>
+
   );
 }
