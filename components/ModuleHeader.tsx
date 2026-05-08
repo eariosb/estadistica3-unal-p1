@@ -80,5 +80,6 @@ export function ModuleHeader({ module }: ModuleHeaderProps) {
         )}
       </div>
     </div>
+
   );
 }

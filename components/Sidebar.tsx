@@ -125,5 +125,6 @@ export function Sidebar() {
         </p>
       </div>
     </aside>
+
   );
 }
