@@ -42,14 +42,13 @@ async function isAuthenticated(req: NextRequest): Promise<boolean> {
   // const session = await getServerSession(authOptions);
   // return !!session?.user;
 
-  // Opción B (desarrollo): verificar header personalizado
+  // Opción B: verificar header personalizado (cuando el frontend lo envíe)
   const authHeader = req.headers.get("x-session-token");
   if (authHeader && authHeader.length > 10) return true;
 
-  // Opción C: permitir todas las peticiones desde localhost en desarrollo
-  if (process.env.NODE_ENV === "development") return true;
-
-  return false;
+  // Opción C: acceso abierto para curso público (sin autenticación de usuarios)
+  // Cambiar a false y habilitar Opción A cuando se quiera restringir acceso.
+  return true;
 }
 
 // ── Handler principal ─────────────────────────────────────────────────────────
