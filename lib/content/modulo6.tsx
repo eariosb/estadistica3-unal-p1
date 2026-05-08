@@ -365,7 +365,3 @@ print(res_df)`
     </div>
   );
 }
-
-    </div>
-  );
-}

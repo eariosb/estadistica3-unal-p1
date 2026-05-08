@@ -455,8 +455,3 @@ cat(sprintf("RMSE = %.2f  |  MAPE = %.2f%%\\n", RMSE_tr, MAPE_tr)))`}
     </div>
   );
 }
-
-      </div>
-    </div>
-  );
-}
