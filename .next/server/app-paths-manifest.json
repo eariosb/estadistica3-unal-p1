@@ -1,6 +1,0 @@
-{
-  "/api/timesight/route": "app/api/timesight/route.js",
-  "/page": "app/page.js",
-  "/timesight/page": "app/timesight/page.js",
-  "/timesight/data/page": "app/timesight/data/page.js"
-}
