@@ -24,19 +24,13 @@ source("timesight_endpoints.R")    # ts_explore, ts_transform, ts_model_fit, ts_
 
 #* @filter cors
 function(req, res) {
-  origin <- req$HTTP_ORIGIN
-  allowed_origins <- c(
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    Sys.getenv("NEXT_PUBLIC_SITE_URL", unset = "")
-  )
-  if (!is.null(origin) && origin %in% allowed_origins) {
-    res$setHeader("Access-Control-Allow-Origin",  origin)
-    res$setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-    res$setHeader("Access-Control-Allow-Headers",
-                  "Content-Type, X-Internal-Secret, Authorization")
-    res$setHeader("Access-Control-Max-Age", "86400")
-  }
+  # CORS abierto: el proxy Next.js en Vercel es la capa de seguridad real.
+  # Para restringir, reemplaza "*" por la URL exacta de tu frontend.
+  res$setHeader("Access-Control-Allow-Origin",  "*")
+  res$setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+  res$setHeader("Access-Control-Allow-Headers",
+                "Content-Type, X-Internal-Secret, Authorization")
+  res$setHeader("Access-Control-Max-Age", "86400")
   if (req$REQUEST_METHOD == "OPTIONS") {
     res$status <- 204L
     return(list())
@@ -260,3 +254,4 @@ function(req, res) {
   )
 }
 
+                                                                                               

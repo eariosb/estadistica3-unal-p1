@@ -177,5 +177,4 @@ Verifica que el backend esté activo (${R_BACKEND_URL}).`,
 
 // Solo POST está permitido
 export async function GET() {
-  return NextResponse.json({ error: "Método no permitido." }, { status: 405 });
-}
+  return NextResponse.json({ error: "M�
