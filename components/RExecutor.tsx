@@ -356,7 +356,7 @@ export function RExecutor({ code: originalCode, title, packages, caption }: RExe
                 </>
               ) : (
                 <>
-                  <Play size={14} fill="white" />
+                  <Play size={14} className="text-white" />
                   <span>Ejecutar</span>
                 </>
               )}
