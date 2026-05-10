@@ -9,9 +9,29 @@ export function Modulo7Content() {
   return (
     <div className="prose-content">
 
+      <Callout type="info" title="¿Por qué ver ejemplos completos?">
+        <p>
+          La teoría de los módulos 1–6 dice <em>qué</em> hacer en cada paso.
+          Los ejemplos muestran <em>cómo</em> se ve ese proceso cuando los datos
+          son reales —incluyendo las decisiones ambiguas, los modelos que no
+          funcionan a la primera, y la iteración necesaria para llegar a un
+          resultado defendible.
+        </p>
+        <p className="mt-2">
+          Los tres casos de este módulo representan tres tipos frecuentes de
+          series de tiempo en la práctica: una serie con múltiples
+          estacionalidades (ingeniería), una con tendencia y estacionalidad
+          económica (economía), y una puramente estacional sin tendencia
+          (ciencias ambientales). Cada una requiere decisiones de modelado
+          diferentes.
+        </p>
+      </Callout>
+
       <p className="text-base text-stone-600 leading-relaxed mb-8 border-l-4 border-stone-200 pl-4">
         Tres casos de uso completos con código R reproducible. Cada ejemplo
-        sigue el flujo de los seis pasos del Módulo 6.
+        sigue el flujo de los siete pasos del Módulo 6: exploración →
+        transformación → tendencia → estacionalidad → ajuste → diagnóstico →
+        pronóstico.
       </p>
 
       {/* ── 7.1 Demanda eléctrica ─────────────────────────── */}
@@ -100,8 +120,19 @@ lines(t[1:168], fitted(modelo_elec)[1:168], col = "#1d4ed8", lwd = 2)`}
       <p>
         Serie del PIB trimestral del sector agropecuario de Colombia en miles
         de millones de pesos constantes. Presenta tendencia creciente con
-        variabilidad que aumenta levemente → usamos <I c="\log(Y_t)" />.
+        variabilidad que aumenta con el nivel → candidato a modelo log-cuadrático.
       </p>
+      <Callout type="info" title="Lección de este ejemplo">
+        <p>
+          El PIB agrícola de Colombia ilustra una característica frecuente en
+          series económicas colombianas: crecimiento con estacionalidad trimestral
+          marcada (primer trimestre suele ser el más bajo por la temporada de
+          siembra; cuarto trimestre el más alto por cosechas y cierre de año).
+          Los coeficientes <I c="\exp(\hat{\delta}_i)" /> revelan directamente
+          el porcentaje del PIB de cada trimestre relativo al cuarto trimestre
+          de referencia —una lectura económicamente interpretable.
+        </p>
+      </Callout>
 
       <CodeBlock
         title="Análisis completo: PIB agrícola trimestral"

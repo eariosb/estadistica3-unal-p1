@@ -5,10 +5,29 @@ export function Modulo6Content() {
   return (
     <div className="prose-content">
 
+      <Callout type="info" title="¿Qué hace la diferencia entre un análisis superficial y uno riguroso?">
+        <p>
+          Después de dominar los módulos anteriores, ya tienes las herramientas.
+          Pero en la práctica, la mayoría de los errores no son técnicos —son de{" "}
+          <em>proceso</em>: saltarse pasos, no revisar los residuos, comparar
+          modelos sin criterio, o confiar en un R² alto sin verificar los
+          supuestos.
+        </p>
+        <p className="mt-2">
+          Este módulo formaliza el flujo de trabajo que un analista experto sigue
+          en cada proyecto de series de tiempo. No es un listado burocrático:
+          es el orden natural en que los problemas se revelan y se resuelven.
+          Cada paso depende del anterior. Saltarse uno es asumir que el resultado
+          será bueno —y esa apuesta suele perderse.
+        </p>
+      </Callout>
+
       <p className="text-base text-stone-600 leading-relaxed mb-8 border-l-4 border-stone-200 pl-4">
         Este módulo consolida el flujo de trabajo completo: desde el primer
         gráfico hasta el pronóstico final validado. Úsalo como lista de
-        verificación en cada análisis.
+        verificación en cada análisis. Cada paso tiene código ejecutable que
+        sigue el ejemplo de <code>AirPassengers</code> —la serie más completa
+        del curso.
       </p>
 
       {/* ── 6.1 Pasos recomendados ───────────────────────── */}
@@ -327,6 +346,43 @@ print(res_df)`
           ))}
         </tbody>
       </table>
+
+      <Callout type="example" title="Lo que el diagnóstico de residuos te dice — guía de lectura">
+        <p>
+          Los residuos son la firma del modelo: revelan lo que no capturaste.
+          Aprende a leerlos:
+        </p>
+        <ul className="mt-1 space-y-1 text-sm">
+          <li>
+            <strong>Residuos con tendencia</strong> (suben o bajan con t) →
+            la tendencia del modelo no es suficiente. Sube el grado del
+            polinomio o usa log(Y).
+          </li>
+          <li>
+            <strong>Residuos con patrón estacional visible</strong> (picos
+            en los mismos meses cada año) → la estacionalidad no fue modelada
+            o no fue correcta. Añade dummies o armónicos.
+          </li>
+          <li>
+            <strong>Residuos con varianza creciente</strong> (embudo) →
+            el modelo es aditivo pero debería ser multiplicativo (log).
+          </li>
+          <li>
+            <strong>ACF con barras significativas</strong> en los primeros
+            rezagos → autocorrelación residual. Necesitas ARIMA sobre el
+            error o más predictores.
+          </li>
+          <li>
+            <strong>Q-Q plot con colas pesadas</strong> → los residuos no
+            son normales. Revisa atípicos o considera transformaciones
+            adicionales.
+          </li>
+          <li>
+            <strong>Residuos limpios</strong> (ruido blanco) → el modelo
+            capturó toda la estructura. Puedes confiar en los pronósticos.
+          </li>
+        </ul>
+      </Callout>
 
       {/* ── 6.3 Errores comunes ──────────────────────────── */}
       <h2 id="errores">6.3 Errores comunes y cómo evitarlos</h2>

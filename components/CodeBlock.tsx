@@ -84,33 +84,46 @@ export function CodeBlock({
       </div>
 
       {/* Código con resaltado */}
-      <div style={{ background: "#1e1e2e", overflowX: "auto" }}>
-        <table style={{ borderCollapse: "collapse", width: "100%", margin: 0 }}>
-          <tbody>
-            {lines.map((line, i) => (
-              <tr key={i}>
-                {showNumbers && (
-                  <td style={{
-                    userSelect: "none", textAlign: "right", paddingRight: "1rem",
-                    paddingLeft: "1rem", color: "#4a4a6a", fontSize: "0.75rem",
-                    verticalAlign: "top", lineHeight: "1.65", whiteSpace: "nowrap",
-                    borderRight: "1px solid #2a2a3a",
-                  }}>
-                    {i + 1}
-                  </td>
-                )}
-                <td
-                  style={{
-                    padding: "0 1.25rem", lineHeight: "1.65",
-                    fontSize: "0.825rem", fontFamily: "JetBrains Mono, Fira Code, monospace",
-                    color: "#d4d4d4", whiteSpace: "pre-wrap", wordBreak: "break-word",
-                  }}
-                  dangerouslySetInnerHTML={{ __html: highlight(line, language) }}
-                />
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div style={{ background: "#1e1e2e", overflowX: "auto", padding: "0.75rem 0" }}>
+        <pre style={{
+          margin: 0,
+          fontFamily: "JetBrains Mono, Fira Code, 'Cascadia Code', monospace",
+          fontSize: "0.825rem",
+          lineHeight: "1.45",
+          background: "transparent",
+        }}>
+          {lines.map((line, i) => (
+            <div key={i} style={{ display: "flex" }}>
+              {showNumbers && (
+                <span style={{
+                  userSelect: "none",
+                  minWidth: "2.8rem",
+                  paddingRight: "1rem",
+                  paddingLeft: "1rem",
+                  color: "#4a4a6a",
+                  fontSize: "0.75rem",
+                  textAlign: "right",
+                  flexShrink: 0,
+                  borderRight: "1px solid #2a2a3a",
+                  lineHeight: "1.45",
+                }}>
+                  {i + 1}
+                </span>
+              )}
+              <span
+                style={{
+                  paddingLeft: "1.25rem",
+                  paddingRight: "1.25rem",
+                  color: "#d4d4d4",
+                  whiteSpace: "pre",
+                  flex: 1,
+                  lineHeight: "1.45",
+                }}
+                dangerouslySetInnerHTML={{ __html: highlight(line, language) }}
+              />
+            </div>
+          ))}
+        </pre>
       </div>
 
       {caption && (

@@ -40,6 +40,26 @@ export function Modulo8Content() {
   return (
     <div className="prose-content">
 
+      <Callout type="info" title="¿Por qué el diagnóstico es el paso más importante?">
+        <p>
+          Hay un patrón común en los análisis de series de tiempo: mucho esfuerzo
+          ajustando modelos y eligiendo parámetros, pero muy poco revisando los
+          residuos. El resultado: modelos con R² alto que producen pronósticos
+          pobres, o con inferencias estadísticas inválidas porque se violaron
+          supuestos.
+        </p>
+        <p className="mt-2">
+          Los residuos son la <strong>huella del error de especificación</strong>.
+          Si el modelo es correcto, los residuos no deberían tener ninguna
+          estructura —deberían parecer ruido aleatorio. Cualquier patrón visible
+          en los residuos es una señal de que el modelo se puede mejorar.
+        </p>
+        <p className="mt-2">
+          Un analista experimentado revisa los residuos antes de comunicar
+          cualquier resultado. Esta es la prueba de fuego del modelo.
+        </p>
+      </Callout>
+
       <p className="text-base text-stone-600 leading-relaxed mb-8 border-l-4 border-teal-300 pl-4">
         Un modelo de regresión para series de tiempo solo es válido si sus residuos se
         comportan como <strong>ruido blanco gaussiano</strong>:{" "}
@@ -47,6 +67,23 @@ export function Modulo8Content() {
         reúne todas las pruebas formales y gráficos diagnósticos para verificarlo,
         con ejemplos reproducibles usando datasets de R base.
       </p>
+
+      <Callout type="formula" title="Los cuatro supuestos que verificarás — en orden de importancia">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+          {[
+            { num: "1", name: "Independencia", why: "Si los residuos están correlacionados, los errores estándar son incorrectos y las pruebas t no son válidas. Es el supuesto más crítico en series de tiempo.", tools: "ACF, Ljung-Box, Durbin-Watson" },
+            { num: "2", name: "Homocedasticidad", why: "Si la varianza cambia con el tiempo o con el nivel, los intervalos de predicción serán mal calibrados.", tools: "Gráfico residuos vs ajustados, Breusch-Pagan" },
+            { num: "3", name: "Media cero", why: "Si los residuos tienen sesgo sistemático, el modelo está subestimando o sobreestimando en alguna región.", tools: "Gráfico residuos vs tiempo" },
+            { num: "4", name: "Normalidad", why: "Necesaria para las pruebas t y los IC exactos. Con n grande (>30), el TCL suaviza las violaciones moderadas.", tools: "Q-Q plot, Shapiro-Wilk" },
+          ].map(({ num, name, why, tools }) => (
+            <div key={num} className="p-3 bg-stone-50 rounded-lg border border-stone-200">
+              <p className="font-bold text-sm text-stone-800 mb-1">{num}. {name}</p>
+              <p className="text-xs text-stone-600 mb-1">{why}</p>
+              <p className="text-xs font-mono text-blue-600">{tools}</p>
+            </div>
+          ))}
+        </div>
+      </Callout>
 
       {/* ── Bloque de funciones auxiliares ─────────────── */}
       <h2 id="setup">Configuración inicial — funciones auxiliares y paquetes</h2>

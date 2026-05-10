@@ -9,6 +9,30 @@ export function Modulo5Content() {
   return (
     <div className="prose-content">
 
+      {/* ── Motivación ──────────────────────────────────────── */}
+      <Callout type="info" title="¿Cuándo los modelos globales no son suficientes?">
+        <p>
+          Los modelos de los módulos anteriores asumen que la tendencia tiene
+          una forma fija (lineal, cuadrática) durante todo el período de
+          observación. Eso funciona bien cuando la dinámica es estable. Pero
+          ¿qué pasa si la tendencia cambia de forma en distintos tramos? ¿O si
+          la amplitud estacional no es constante sino que evoluciona a lo largo
+          de los años?
+        </p>
+        <p className="mt-2">
+          Para esos casos existen los <strong>métodos de ajuste local</strong>:
+          en lugar de ajustar un único modelo global, se ajusta un modelo
+          diferente en cada región del tiempo, usando solo las observaciones
+          más cercanas. LOESS y STL son los dos métodos estándar para esto.
+        </p>
+        <p className="mt-2">
+          Nota: estos métodos son excelentes para <em>análisis exploratorio</em>
+          y para datos con patrones cambiantes, pero tienen una limitación:{" "}
+          <strong>no producen una ecuación cerrada</strong>, lo que complica la
+          interpretación y el pronóstico.
+        </p>
+      </Callout>
+
       {/* ── 5.1 LOESS ───────────────────────────────────── */}
       <h2 id="loess">5.1 LOESS — Regresión Localmente Estimada</h2>
       <p>
@@ -189,32 +213,59 @@ cat("Span óptimo (menor RMSE):", spans[which.min(rmse_sp)], "\\n")`}
         </li>
       </ol>
 
-      <Callout type="formula" title="Ventanas clave de STL">
+      <Callout type="formula" title="Ventanas clave de STL — guía práctica">
         <ul className="mt-1 space-y-1">
           <li>
-            <code>s.window</code>: controla la suavidad de la estacionalidad.{" "}
-            <code>"periodic"</code> fija la estacionalidad igual cada año.
-            Valores numéricos impares (ej. 7, 11, 13) permiten que evolucione.
+            <strong><code>s.window</code></strong>: controla la suavidad de
+            la estacionalidad. <code>"periodic"</code> fija el patrón
+            estacional igual cada año —idóneo cuando la estacionalidad es
+            estable. Valores numéricos impares (ej. 7, 11, 13) permiten que
+            evolucione: un valor pequeño da más flexibilidad.
           </li>
           <li>
-            <code>t.window</code>: controla la suavidad de la tendencia.
-            Por defecto se elige automáticamente como{" "}
-            <I c="\lceil 1.5s / (1 - 1.5/s.\text{window}) \rceil" />.
+            <strong><code>t.window</code></strong>: controla la suavidad de
+            la tendencia. Un valor mayor produce una tendencia más suave.
+            Por defecto se calcula automáticamente.
           </li>
           <li>
-            <code>robust = TRUE</code>: activa el loop externo para
-            resistencia a atípicos.
+            <strong><code>robust = TRUE</code></strong>: activa el loop
+            externo para resistencia a atípicos. Úsalo siempre que la serie
+            tenga valores extremos o cambios de nivel abruptos.
           </li>
         </ul>
+        <p className="mt-2 text-sm">
+          <strong>Punto de partida recomendado:</strong>{" "}
+          <code>stl(yt, s.window="periodic", robust=TRUE)</code>. Si el
+          panel estacional muestra variación creciente, prueba con{" "}
+          <code>s.window=7</code> u <code>11</code>.
+        </p>
       </Callout>
 
       {/* ── Ejemplo STL con co2 ─────────────────────────── */}
       <h2 id="ejemplo-stl">5.4 Ejemplo — STL sobre co2 (Mauna Loa)</h2>
       <p>
         El dataset <code>co2</code> es ideal para STL: tiene una tendencia
-        monotóna creciente y un patrón estacional anual muy regular. STL
-        separa ambas con precisión, dejando un residuo pequeño.
+        creciente y un patrón estacional anual muy regular. STL separa ambas
+        con precisión, dejando un residuo muy pequeño. El código también calcula
+        la <strong>fuerza estacional</strong> <I c="F_s" /> y la{" "}
+        <strong>fuerza de tendencia</strong> <I c="F_t" />: miden qué fracción
+        de la varianza total explica cada componente.
       </p>
+
+      <Callout type="info" title="¿Qué significan Fs y Ft?">
+        <p>
+          <I c="F_s > 0.64" /> indica estacionalidad fuerte. Para co2, esperamos{" "}
+          <I c="F_s \approx 0.99" /> y <I c="F_t \approx 0.99" />: la serie
+          está casi completamente dominada por tendencia y estacionalidad, con
+          muy poco ruido. Ese es un resultado ideal.
+        </p>
+        <p className="mt-2">
+          Cuando <I c="F_s" /> es bajo (por ejemplo, 0.3), la componente
+          estacional es débil relativa al ruido —quizás no vale la pena
+          modelarla. Cuando <I c="F_t" /> es bajo, la tendencia es débil o
+          inexistente. Estos indicadores guían la selección de componentes.
+        </p>
+      </Callout>
 
       <CodeBlock
         executable={true}

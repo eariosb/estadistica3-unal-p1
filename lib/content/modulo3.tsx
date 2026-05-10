@@ -9,12 +9,33 @@ export function Modulo3Content() {
   return (
     <div className="prose-content">
 
+      {/* ── Motivación ──────────────────────────────────────── */}
+      <Callout type="info" title="¿Por qué modelar la estacionalidad?">
+        <p>
+          Piensa en el consumo de energía eléctrica en Colombia. Es más alto en
+          diciembre (iluminación navideña, fin de año) y más bajo en septiembre.
+          Eso es estacionalidad: un patrón que se repite cada año. Si tienes un
+          modelo de tendencia pero ignoras la estacionalidad, los residuos
+          mostrarán el mismo ciclo cada año —estructura visible que el modelo no
+          está aprovechando.
+        </p>
+        <p className="mt-2">
+          En este módulo aprenderás <strong>dos formas de modelar ese
+          patrón</strong>: con variables indicadoras (dummies) —una por cada
+          período del año— y con funciones trigonométricas (armónicos de
+          Fourier). Son equivalentes cuando se usan todos los armónicos, pero
+          las funciones trigonométricas permiten una representación más
+          parsimoniosa cuando el patrón es suave.
+        </p>
+      </Callout>
+
       {/* ── 3.1 Variables indicadoras ───────────────────── */}
       <h2 id="indicadoras">3.1 Estacionalidad con variables indicadoras (dummies)</h2>
       <p>
         Cuando el patrón estacional es <strong>regular y se repite
         idénticamente</strong> de año en año, lo modelamos con un conjunto de
-        variables binarias. Para una serie con periodo <I c="s" />, se definen{" "}
+        variables binarias —una por cada período del año, excepto uno que sirve
+        de referencia. Para una serie con periodo <I c="s" />, se definen{" "}
         <I c="s - 1" /> variables indicadoras:
       </p>
       <D c="I_{i,t} = \begin{cases} 1 & \text{si en } t \text{ se observa la estación } i \\ 0 & \text{en otro caso} \end{cases} \quad (i = 1, \ldots, s-1)" />
@@ -29,21 +50,40 @@ export function Modulo3Content() {
       <D c="Y_t = \mu + \sum_{i=1}^{s-1} \delta_i \, I_{i,t} + E_t, \quad E_t \overset{\text{iid}}{\sim} N(0, \sigma^2)" />
       <p>
         donde <I c="\mu = \beta_0" /> es el nivel medio de la{" "}
-        <strong>estación de referencia</strong> (<I c="s" />), y cada{" "}
-        <I c="\delta_i" /> mide la desviación del nivel medio de la estación{" "}
-        <I c="i" /> respecto a esa referencia. Al incorporar tendencia
-        polinomial (Módulo 4), <I c="\mu" /> queda absorbido en{" "}
-        <I c="\beta_0" />.
+        <strong>estación de referencia</strong>, y cada <I c="\delta_i" />{" "}
+        mide la desviación del nivel medio de la estación <I c="i" /> respecto
+        a esa referencia. Al incorporar tendencia polinomial en el Módulo 4,{" "}
+        <I c="\mu" /> queda absorbido en el intercepto <I c="\beta_0" />.
       </p>
 
-      <h3 id="interpretacion-deltas">Interpretación de los coeficientes δᵢ</h3>
+      <Callout type="info" title="¿Por qué s − 1 indicadoras y no s?">
+        <p>
+          Incluir las <I c="s" /> indicadoras genera colinealidad perfecta con
+          el intercepto (multicolinealidad exacta), pues{" "}
+          <I c="\sum_{i=1}^s I_{i,t} = 1" /> para todo <I c="t" />. Se omite
+          una (la categoría de referencia) para que el sistema sea
+          identificable. Todas las comparaciones se expresan entonces
+          relativamente a esa categoría omitida.
+        </p>
+        <p className="mt-2">
+          La elección de la categoría de referencia <strong>no cambia el
+          ajuste del modelo</strong> —el R², AIC y los residuos son idénticos—
+          pero sí cambia la interpretación de los coeficientes. En R,{" "}
+          <code>seasonaldummy(yt)</code> omite por defecto la última estación
+          (diciembre para datos mensuales).
+        </p>
+      </Callout>
+
+      <h3 id="interpretacion-deltas">Interpretación de los coeficientes <I c="\hat{\delta}_i" /></h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 my-4">
         <div className="p-4 rounded-lg border border-blue-200 bg-blue-50">
           <p className="font-semibold text-blue-800 text-sm mb-2">Modelo aditivo</p>
           <D c="\delta_i = E[Y_t \mid \text{estación } i] - E[Y_t \mid \text{estación } s]" />
           <p className="text-sm text-stone-600 mt-2">
-            Diferencia absoluta en el nivel medio entre la estación i y la
-            estación de referencia.
+            Diferencia <em>absoluta</em> en el nivel medio entre la estación i
+            y la estación de referencia. Si <I c="\hat{\delta}_{\text{Jul}} = 14.2" />{" "}
+            con datos de temperatura, julio es en promedio 14.2°F más cálido
+            que diciembre.
           </p>
         </div>
         <div className="p-4 rounded-lg border border-emerald-200 bg-emerald-50">
@@ -51,42 +91,40 @@ export function Modulo3Content() {
           <D c="\exp(\delta_i) = \frac{E[Y_t \mid \text{estación } i]}{E[Y_t \mid \text{estación } s]}" />
           <p className="text-sm text-stone-600 mt-2">
             Razón entre el nivel medio de la estación i y el de referencia.
-            Si <I c="\exp(\delta_i) = 0.88" /> → la estación i tiene un
-            nivel 12% menor.
+            Si <I c="\exp(\hat{\delta}_i) = 1.35" /> → la estación i tiene un
+            nivel 35% mayor. Si <I c="\exp(\hat{\delta}_i) = 0.88" /> → 12%
+            menor.
           </p>
         </div>
       </div>
-
-      <Callout type="info" title="¿Por qué s − 1 indicadoras y no s?">
-        <p>
-          Incluir las <I c="s" /> indicadoras genera colinealidad perfecta con
-          el intercepto (multicolinealidad exacta), pues{" "}
-          <I c="\sum_{i=1}^s I_{i,t} = 1" /> para todo <I c="t" />. Se omite
-          una (la categoría de referencia) para que el sistema sea identificable.
-          Todas las comparaciones se expresan entonces relativamente a esa
-          categoría omitida.
-        </p>
-      </Callout>
 
       {/* ── Ejemplo nottem ──────────────────────────────── */}
       <h2 id="ejemplo-nottem">3.2 Ejemplo A — nottem: temperatura mensual de Nottingham</h2>
       <p>
         El dataset <code>nottem</code> (base R) registra la temperatura media
-        mensual en grados Fahrenheit en Nottingham Castle (Reino Unido), de
-        enero de 1920 a diciembre de 1939 (<I c="n = 240" /> observaciones,{" "}
-        <I c="s = 12" />). No hay tendencia apreciable, por lo que el modelo
-        es solo estacional con intercepto:
+        mensual en grados Fahrenheit en Nottingham Castle, de enero de 1920 a
+        diciembre de 1939 (<I c="n = 240" /> observaciones, <I c="s = 12" />
+        ). No hay tendencia apreciable —el nivel medio es estable a lo largo
+        de 20 años— por lo que el modelo es solo estacional con intercepto:
       </p>
       <D c="Y_t = \mu + \sum_{i=1}^{11} \delta_i I_{i,t} + E_t" />
 
-      <Callout type="example" title="Efecto estacional en nottem (ref = diciembre)">
-        <p>
-          Junio, julio y agosto son los meses más cálidos: sus{" "}
-          <I c="\hat{\delta}_i" /> son positivos (~14–16°F sobre diciembre).
-          Enero y febrero muestran los coeficientes más negativos (~−11°F).
-          El <I c="R^2" /> ajustado supera 0.97, lo que confirma que la
-          estacionalidad explica casi toda la variabilidad.
-        </p>
+      <Callout type="info" title="¿Qué vas a ver al ejecutar el código?">
+        <ol className="mt-1 list-decimal list-inside space-y-1 text-sm">
+          <li>
+            El <code>summary(mod_est)</code> con los 11 coeficientes{" "}
+            <I c="\hat{\delta}_i" /> para los meses de enero a noviembre
+            (diciembre = referencia). Todos deberían ser significativos.
+          </li>
+          <li>
+            Un gráfico de barras con los efectos estacionales: barras rojas
+            (temperatura sobre diciembre) vs azules (bajo diciembre).
+          </li>
+          <li>
+            La serie observada vs la curva ajustada: debería estar muy cerca
+            dado que la estacionalidad explica &gt;97% de la variación.
+          </li>
+        </ol>
       </Callout>
 
       <CodeBlock
@@ -97,31 +135,33 @@ export function Modulo3Content() {
 library(ggplot2)
 
 # ── Dataset ───────────────────────────────────────────────
-# nottem disponible directamente en el entorno de R
 yt <- nottem
 n  <- length(yt)             # 240
 t  <- 1:n
 
 # ── s-1 = 11 indicadoras; referencia = diciembre (mes 12) ─
-dum_nottem <- seasonaldummy(yt)   # columnas Ene, Feb, ..., Nov
+# seasonaldummy() genera 11 columnas binarias automáticamente
+dum_nottem <- seasonaldummy(yt)
 datos      <- data.frame(yt = as.numeric(yt), dum_nottem)
 mod_est    <- lm(yt ~ ., data = datos)
+cat("R² ajustado:", round(summary(mod_est)$adj.r.squared, 4), "\\n")
+cat("RMSE:", round(sqrt(mean(residuals(mod_est)^2)), 3), "°F\\n\\n")
 summary(mod_est)
 
 # ── Efectos estacionales: δ̂ᵢ ─────────────────────────────
-coefs <- coef(mod_est)
-meses <- c("Ene","Feb","Mar","Abr","May","Jun",
-           "Jul","Ago","Sep","Oct","Nov","Dic")
-delta_est <- c(coefs[-1], 0)   # δ₁₂ = 0 por ser referencia
-df_delta  <- data.frame(Mes = factor(meses, levels = meses),
-                         delta = delta_est)
+coefs     <- coef(mod_est)
+meses     <- c("Ene","Feb","Mar","Abr","May","Jun",
+               "Jul","Ago","Sep","Oct","Nov","Dic")
+delta_est <- c(coefs[-1], 0)   # δ₁₂ = 0 (referencia)
+df_delta  <- data.frame(
+  Mes   = factor(meses, levels = meses),
+  delta = delta_est
+)
 
-ggplot(df_delta, aes(x = Mes, y = delta,
-                     fill = delta > 0)) +
+ggplot(df_delta, aes(x = Mes, y = delta, fill = delta > 0)) +
   geom_col(show.legend = FALSE) +
   geom_hline(yintercept = 0, colour = "black", linewidth = 0.5) +
-  scale_fill_manual(values = c("TRUE" = "#ef4444",
-                                "FALSE" = "#3b82f6")) +
+  scale_fill_manual(values = c("TRUE" = "#ef4444", "FALSE" = "#3b82f6")) +
   labs(
     title    = "Efectos estacionales — nottem (ref = diciembre)",
     subtitle = "δ̂ᵢ: diferencia de temperatura respecto a diciembre (°F)",
@@ -131,12 +171,10 @@ ggplot(df_delta, aes(x = Mes, y = delta,
 
 # ── Ajuste vs observado ───────────────────────────────────
 df_fit <- data.frame(
-  t      = t,
   Año    = as.numeric(time(yt)),
   Obs    = as.numeric(yt),
   Ajuste = fitted(mod_est)
 )
-
 ggplot(df_fit, aes(x = Año)) +
   geom_line(aes(y = Obs,    colour = "Observado"),
             linewidth = 0.7, alpha = 0.8) +
@@ -145,25 +183,38 @@ ggplot(df_fit, aes(x = Año)) +
   scale_colour_manual(
     values = c("Observado" = "#78716c", "Ajustado" = "#1d4ed8")
   ) +
-  labs(title    = "Temperatura Nottingham — ajuste sólo estacional",
+  labs(title    = "Temperatura Nottingham — ajuste solo estacional",
        subtitle = paste0("R² adj = ",
          round(summary(mod_est)$adj.r.squared, 4)),
        x = "Año", y = "Temperatura (°F)", colour = NULL) +
   theme_bw(base_size = 12) +
   theme(legend.position = "top")`}
-        caption="Con 11 indicadoras mensuales el modelo captura >97% de la variación de nottem, confirmando que la estacionalidad es la componente dominante."
+        caption="Con 11 indicadoras el modelo captura >97% de la variación de nottem. Enero y febrero tendrán los δ̂ más negativos (~−11°F); julio y agosto los más positivos (~+14°F). La línea ajustada debería seguir casi perfectamente la serie observada."
       />
+
+      <Callout type="example" title="Cómo leer el summary() en un modelo estacional">
+        <p>
+          El intercepto (<code>Intercept</code>) es el nivel medio de{" "}
+          <strong>diciembre</strong> (la categoría de referencia). Cada
+          coeficiente <code>Ene</code>, <code>Feb</code>, etc. es la diferencia
+          media de temperatura de ese mes respecto a diciembre. Todos deberían
+          aparecer con p-valor ≈ 0 (tres asteriscos) porque el patrón estacional
+          de nottem es muy claro.
+        </p>
+        <p className="mt-2">
+          Si un coeficiente no es significativo (p-valor grande), significa que
+          ese mes no difiere estadísticamente del mes de referencia —podría
+          colapsarse con él para reducir el número de parámetros.
+        </p>
+      </Callout>
 
       <CodeBlock
         executable={true}
         packages={["forecast"]}
-        title="▶ interpdeltas() — efectos estacionales con IC 95% (nottem)"
+        title="▶ interpdeltas() — efectos estacionales con IC 95%"
         code={`library(forecast)
 
-# ── Setup (autocontenido) ─────────────────────────────────
 yt      <- nottem
-n       <- length(yt)
-t       <- 1:n
 dum_not <- seasonaldummy(yt)
 mod_est <- lm(as.numeric(yt) ~ dum_not)
 
@@ -176,88 +227,141 @@ interpdeltas <- function(modelo, s, nombres_est = NULL) {
   df_out <- data.frame(
     Estacion  = if (!is.null(nombres_est)) nombres_est[-s]
                 else paste0("S", 1:(s-1)),
-    delta_hat = round(deltas, 4),
+    delta_hat = round(deltas, 3),
     exp_delta = round(exp(deltas), 4),
-    IC_inf    = round(deltas - 1.96 * se_d, 4),
-    IC_sup    = round(deltas + 1.96 * se_d, 4)
+    IC_inf    = round(deltas - 1.96 * se_d, 3),
+    IC_sup    = round(deltas + 1.96 * se_d, 3),
+    signif    = ifelse(abs(deltas) > 1.96 * se_d, "***", "ns")
   )
+  cat("Efectos estacionales con IC 95%:\\n")
   print(df_out)
+  cat("\\nNota: exp_delta = factor multiplicativo",
+      "(útil cuando el modelo es log(Y))\\n")
   invisible(df_out)
 }
 
-# ── Aplicar a nottem ──────────────────────────────────────
 meses <- c("Ene","Feb","Mar","Abr","May","Jun",
            "Jul","Ago","Sep","Oct","Nov","Dic")
 interpdeltas(mod_est, s = 12, nombres_est = meses)`}
-        caption="interpdeltas() extrae δ̂ᵢ, exp(δ̂ᵢ) y el IC 95% de cada estación. exp(δ̂ᵢ) es el factor multiplicativo (útil para modelos log)."
+        caption="exp_delta: si el modelo estuviera en escala log, este sería el factor por el que se multiplica el nivel en la estación i respecto a la de referencia. En el modelo aditivo (nottem), delta_hat es directamente el efecto en °F."
       />
 
       {/* ── 3.3 Funciones trigonométricas ───────────────── */}
       <h2 id="trigonometricas">3.3 Estacionalidad con funciones trigonométricas (armónicos)</h2>
       <p>
-        Cuando el patrón estacional tiene una forma suave o se quiere una
-        representación más <strong>parsimoniosa</strong>, se usan sumas de
-        senos y cosenos (series de Fourier):
+        Las variables dummy tienen una limitación: modelan cada estación de
+        forma <em>independiente</em>, sin asumir suavidad entre períodos
+        adyacentes. Enero puede ser muy diferente de febrero sin que el modelo
+        "sepa" que son meses consecutivos. Cuando el patrón estacional es suave
+        —como una ola que sube en verano y baja en invierno— las{" "}
+        <strong>funciones trigonométricas</strong> (series de Fourier) ofrecen
+        una representación más parsimoniosa:
       </p>
       <D c="S_t = \sum_{j=1}^{k} \left[\alpha_j \sin(2\pi F_j t) + \gamma_j \cos(2\pi F_j t)\right]" />
       <p>
-        donde <I c="F_j" /> son las frecuencias identificadas en el
-        periodograma de la serie diferenciada. Para series mensuales, las
-        frecuencias naturales son <I c="F_j = j/12" /> con{" "}
-        <I c="j = 1, \ldots, 6" />.
+        donde <I c="F_j = j/s" /> son las frecuencias armónicas y{" "}
+        <I c="k \leq \lfloor s/2 \rfloor" /> es el número de armónicos a
+        incluir. Cada armónico captura un ciclo a una frecuencia específica.
+        Con <I c="k = 1" /> se tiene la onda fundamental (período = s);{" "}
+        con <I c="k = 2" /> se añade el primer armónico (período = s/2), y
+        así sucesivamente.
       </p>
+
+      <Callout type="formula" title="¿Cuántos armónicos usar? — Selección por periodograma">
+        <p>
+          El <strong>periodograma</strong> descompone la potencia de la serie
+          en cada frecuencia. Los armónicos con picos altos en el periodograma
+          son los que más contribuyen al patrón estacional.
+        </p>
+        <p className="mt-2">
+          Procedimiento práctico:
+        </p>
+        <ol className="mt-1 list-decimal list-inside space-y-1 text-sm">
+          <li>Diferencia la serie para remover la tendencia.</li>
+          <li>Calcula el periodograma con <code>spec.pgram()</code>.</li>
+          <li>Identifica los picos más altos: esas son las frecuencias a incluir.</li>
+          <li>Empieza con los <I c="k" /> armónicos principales y usa AIC/BIC para
+          confirmar si más armónicos mejoran el ajuste.</li>
+        </ol>
+      </Callout>
 
       <h3 id="periodograma">El periodograma</h3>
       <p>
-        El periodograma estima la densidad espectral de potencia de la serie
-        en cada frecuencia discreta <I c="\omega_j = j/n" /> con{" "}
-        <I c="j = 1, \ldots, \lfloor n/2 \rfloor" />. Para la serie{" "}
-        <I c="Y_1, \ldots, Y_n" />, se define:
+        El periodograma estima la densidad espectral de potencia en cada
+        frecuencia discreta <I c="\omega_j = j/n" />. Para la serie{" "}
+        <I c="Y_1, \ldots, Y_n" />, el valor en la frecuencia <I c="\omega_j" /> es:
       </p>
-      <D c="I(\omega_j) = \frac{1}{n}\left|\sum_{t=1}^{n} Y_t \, e^{-2\pi i \omega_j t}\right|^2 = \frac{1}{n}\!\left[\left(\sum_{t=1}^n Y_t \cos 2\pi\omega_j t\right)^{\!2} + \left(\sum_{t=1}^n Y_t \sin 2\pi\omega_j t\right)^{\!2}\right]" />
+      <D c="I(\omega_j) = \frac{1}{n}\left[\left(\sum_{t=1}^n Y_t \cos 2\pi\omega_j t\right)^{\!2} + \left(\sum_{t=1}^n Y_t \sin 2\pi\omega_j t\right)^{\!2}\right]" />
       <p>
         Un pico en <I c="\omega_j = F_j" /> indica que la serie contiene un
-        ciclo de periodo <I c="1/F_j" /> observaciones. Por ejemplo, en una
-        serie mensual con ciclo anual, el pico dominante aparece en{" "}
-        <I c="\omega = 1/12 \approx 0.083" />. Los picos dominantes
-        identifican las frecuencias <I c="F_j" /> que se usan en{" "}
-        <code>Mytrigon()</code>.
+        ciclo de período <I c="1/F_j" /> observaciones. En una serie mensual
+        con ciclo anual, el pico dominante aparece en{" "}
+        <I c="\omega = 1/12 \approx 0.083" />. Frecuencias{" "}
+        <I c="2/12, 3/12, \ldots" /> son los <em>armónicos superiores</em> del
+        ciclo anual.
       </p>
+
       <CodeBlock
         executable={true}
         packages={["forecast"]}
-        title="▶ Periodograma para identificar frecuencias dominantes (nottem)"
-        code={`# ── Diferenciar para remover tendencia ───────────────────
+        title="▶ Periodograma — identificar frecuencias dominantes (nottem)"
+        code={`# ── Diferenciar para remover tendencia antes del periodograma
+# (si no se hace, el pico en frecuencia 0 domina todo)
 dyt <- diff(nottem, differences = 1)
 
 # ── Calcular el periodograma ──────────────────────────────
 espectro <- spec.pgram(dyt, taper = 0, log = "no",
                        main = "Periodograma de diff(nottem)")
-# Para nottem: el pico dominante está en F = 1/12 ≈ 0.083 (ciclo anual)
-# y armónicos en F = 2/12, 3/12, ...
 
 # ── Frecuencias más importantes ───────────────────────────
-idx_top   <- order(espectro$spec, decreasing = TRUE)[1:6]
-freq_dom  <- espectro$freq[idx_top]
-cat("Frecuencias dominantes:", round(freq_dom, 4), "\n")
-cat("Períodos (en meses):", round(1 / freq_dom, 1), "\n")`}
+idx_top  <- order(espectro$spec, decreasing = TRUE)[1:6]
+freq_dom <- espectro$freq[idx_top]
+pow_dom  <- espectro$spec[idx_top]
+periodo  <- round(1 / freq_dom, 2)
+
+df_pico <- data.frame(
+  Frecuencia = round(freq_dom, 4),
+  Periodo    = periodo,
+  Potencia   = round(pow_dom, 1)
+)
+cat("Top 6 frecuencias dominantes:\\n")
+print(df_pico)
+cat("\\nInterpretación: pico en F≈0.083 = ciclo de 12 meses (anual)\\n")
+cat("Pico en F≈0.167 = ciclo de 6 meses (semi-anual, 2do armónico)\\n")`}
+        caption="El pico más alto debería estar en F ≈ 0.083 (período de 12 meses = ciclo anual). El segundo pico estará en F ≈ 0.167 (período de 6 meses = segundo armónico). Esas son las frecuencias que incluirás en Mytrigon()."
       />
 
       {/* ── Ejemplo USAccDeaths ─────────────────────────── */}
-      <h2 id="ejemplo-usacc">3.4 Ejemplo B — USAccDeaths: modelo trigonométrico</h2>
+      <h2 id="ejemplo-usacc">3.4 Ejemplo B — USAccDeaths: dummies vs armónicos de Fourier</h2>
       <p>
         El dataset <code>USAccDeaths</code> (base R) contiene el número mensual
         de muertes accidentales en EE.UU. de 1973 a 1978 (<I c="n = 72" />,{" "}
-        <I c="s = 12" />). Usamos funciones trigonométricas para modelar la
-        estacionalidad — la serie tiene un pico claro en verano (julio) y un
-        mínimo en invierno.
+        <I c="s = 12" />). La serie tiene un pico claro en verano (julio) y un
+        mínimo en invierno. Compararemos dos enfoques para modelar ese patrón:
+        dummies (11 parámetros) y armónicos de Fourier (con solo 3 armónicos =
+        6 parámetros).
       </p>
+
+      <Callout type="info" title="¿Qué vas a ver al ejecutar el código?">
+        <ul className="mt-1 space-y-1 text-sm">
+          <li>
+            Los AIC de los dos modelos: trigonométrico (k=3) y dummies (s-1=11).
+            Si son similares, el modelo trigonométrico es mejor por parsimonia.
+          </li>
+          <li>
+            Un gráfico con tres curvas: observado, ajuste trigonométrico y ajuste
+            con dummies. Deberían ser casi indistinguibles para el patrón suave
+            de USAccDeaths.
+          </li>
+        </ul>
+      </Callout>
 
       <CodeBlock
         executable={true}
         packages={["forecast","ggplot2"]}
-        title="▶ USAccDeaths — dummies vs armónicos de Fourier"
+        title="▶ USAccDeaths — dummies vs armónicos de Fourier (parsimonia)"
         code={`# ── Función auxiliar Mytrigon (autocontenida) ─────────────
+# Genera columnas sen1, cos1, sen2, cos2, ... para lm()
 Mytrigon <- function(tiempo, Frecuencias) {
   n  <- length(tiempo)
   df <- data.frame(matrix(nrow = n, ncol = 2 * length(Frecuencias)))
@@ -271,65 +375,84 @@ Mytrigon <- function(tiempo, Frecuencias) {
   df
 }
 
-# ── Dataset ───────────────────────────────────────────────
-# USAccDeaths disponible directamente en el entorno de R
+library(forecast)
+library(ggplot2)
+
 yt3 <- USAccDeaths
 n3  <- length(yt3)            # 72
 t3  <- 1:n3
 
-# ── Modelo con 3 armónicos (parsimonia) ───────────────────
-trig3 <- Mytrigon(t3, Frecuencias = (1:3) / 12)
+# ── Modelo trigonométrico: probar k = 1, 2, 3, 4 armónicos ─
+cat("── Selección del número de armónicos por AIC ──\\n")
+for (k in 1:4) {
+  trig_k <- Mytrigon(t3, Frecuencias = (1:k) / 12)
+  mod_k  <- lm(as.numeric(yt3) ~ ., data = trig_k)
+  cat(sprintf("k=%d  AIC=%.2f  R²adj=%.4f  paráms=%d\\n",
+              k, AIC(mod_k), summary(mod_k)$adj.r.squared, 2*k+1))
+}
+
+# ── Modelo seleccionado: k=3 armónicos ─────────────────────
+trig3    <- Mytrigon(t3, Frecuencias = (1:3) / 12)
 mod_trig <- lm(as.numeric(yt3) ~ ., data = trig3)
-summary(mod_trig)
 
 # ── Modelo con dummies (referencia) ───────────────────────
-library(forecast)
 dum3    <- seasonaldummy(yt3)
 mod_dum <- lm(as.numeric(yt3) ~ ., data = data.frame(dum3))
 
-# ── Comparar AIC ──────────────────────────────────────────
-cat("AIC trigonométrico (k=3):", round(AIC(mod_trig), 2), "\n")
-cat("AIC dummies (s-1=11):    ", round(AIC(mod_dum),  2), "\n")
+cat("\\n── Comparación final ──\\n")
+cat(sprintf("AIC dummies (11 paráms): %.2f\\n", AIC(mod_dum)))
+cat(sprintf("AIC trig k=3 (6 paráms): %.2f  ← más parsimonioso\\n", AIC(mod_trig)))
 
-# ── Gráfico comparativo con ggplot2 ──────────────────────
-library(ggplot2)
-
+# ── Gráfico comparativo ───────────────────────────────────
 df3 <- data.frame(
-  t        = t3,
-  Año      = as.numeric(time(yt3)),
-  Obs      = as.numeric(yt3),
-  Trig3    = fitted(mod_trig),
-  Dummies  = fitted(mod_dum)
+  Año     = as.numeric(time(yt3)),
+  Obs     = as.numeric(yt3),
+  Trig3   = fitted(mod_trig),
+  Dummies = fitted(mod_dum)
 )
 
 ggplot(df3, aes(x = Año)) +
   geom_line(aes(y = Obs,     colour = "Observado"),
             linewidth = 0.8, alpha = 0.8) +
-  geom_line(aes(y = Trig3,   colour = "Trigon. k=3"),
-            linewidth = 1.3, linetype = "solid") +
-  geom_line(aes(y = Dummies, colour = "Dummies s-1=11"),
+  geom_line(aes(y = Trig3,   colour = "Fourier k=3 (6 paráms)"),
+            linewidth = 1.3) +
+  geom_line(aes(y = Dummies, colour = "Dummies (11 paráms)"),
             linewidth = 1.1, linetype = "dashed") +
   scale_colour_manual(
-    values = c("Observado" = "#78716c",
-               "Trigon. k=3"    = "#1d4ed8",
-               "Dummies s-1=11" = "#dc2626")
+    values = c("Observado"              = "#78716c",
+               "Fourier k=3 (6 paráms)" = "#1d4ed8",
+               "Dummies (11 paráms)"    = "#dc2626")
   ) +
   labs(
-    title    = "USAccDeaths — Dummies vs Trigonométricas (k=3)",
-    subtitle = "6 parámetros de Fourier vs 11 dummies — ajuste muy similar",
+    title    = "USAccDeaths — Dummies vs Trigonométricas",
+    subtitle = "Ajuste similar con casi la mitad de parámetros → ventaja de Fourier",
     x = "Año", y = "Muertes accidentales", colour = NULL
   ) +
   theme_bw(base_size = 12) +
   theme(legend.position = "top")`}
-        caption="Con solo 3 armónicos (6 parámetros) se obtiene un ajuste comparable al de 11 dummies. La clave es que el patrón estacional es suave, lo que favorece la representación trigonométrica."
+        caption="Si el AIC del modelo trigonométrico (k=3) es similar o menor al de dummies, el enfoque de Fourier es mejor: mismo ajuste con menos parámetros. Eso es parsimonia en acción."
       />
+
+      <Callout type="example" title="Cómo interpretar la tabla de armónicos">
+        <p>
+          Al probar k = 1, 2, 3, 4 armónicos, busca el punto donde el AIC deja
+          de bajar significativamente. Para USAccDeaths, es típico que:
+        </p>
+        <ul className="mt-1 space-y-1 text-sm">
+          <li>k=1: captura la onda principal (verano alto, invierno bajo)</li>
+          <li>k=2: añade detalle al inicio y fin del año</li>
+          <li>k=3: ajuste muy cercano al de dummies con 6 parámetros vs 11</li>
+          <li>k=4: el AIC casi no cambia → k=3 es suficiente</li>
+        </ul>
+      </Callout>
 
       {/* ── 3.5 Comparación ─────────────────────────────── */}
       <h2 id="comparacion">3.5 Comparación: dummies vs trigonométricas</h2>
       <p>
-        Ambas aproximaciones son equivalentes cuando <I c="k = \lfloor s/2 \rfloor" />{" "}
-        (el máximo de armónicos), pero las trigonométricas con pocos armónicos
-        ofrecen mayor parsimonia.
+        Ambas aproximaciones son equivalentes cuando{" "}
+        <I c="k = \lfloor s/2 \rfloor" /> (el máximo de armónicos), pero las
+        trigonométricas con pocos armónicos ofrecen mayor parsimonia. La
+        elección depende de la naturaleza del patrón estacional:
       </p>
 
       <table>
@@ -348,38 +471,30 @@ ggplot(df3, aes(x = Año)) +
           </tr>
           <tr>
             <td>Interpretación directa</td>
-            <td>✓ Efecto por estación</td>
-            <td>✗ No directa</td>
+            <td>✓ Efecto de cada estación en sus unidades</td>
+            <td>✗ No directa (amplitud y fase)</td>
           </tr>
           <tr>
             <td>Patrón suave</td>
-            <td>✗ Discontinuo</td>
-            <td>✓ Continuo</td>
+            <td>✗ Discontinuo por estación</td>
+            <td>✓ Continuo y diferenciable</td>
           </tr>
           <tr>
-            <td>Selección automática</td>
-            <td>Se incluyen todas</td>
-            <td>Se eligen frecuencias por periodograma</td>
+            <td>Cuándo elegir</td>
+            <td>Patrón irregular, efecto estacional sin suavidad</td>
+            <td>Patrón en forma de ola, variaciones suaves</td>
           </tr>
         </tbody>
       </table>
 
-      <Callout type="info" title="Ventajas de las funciones trigonométricas">
-        <ul className="mt-1 space-y-1">
-          <li>
-            <strong>Parsimonia:</strong> con <I c="k" /> armónicos se usan{" "}
-            <I c="2k" /> parámetros en lugar de <I c="s - 1" />. Para{" "}
-            <I c="s = 12" /> y <I c="k = 3" />: 6 vs 11 parámetros.
-          </li>
-          <li>
-            <strong>Suavidad:</strong> el patrón estimado es continuo y suave,
-            sin discontinuidades entre meses.
-          </li>
-          <li>
-            <strong>Flexibilidad:</strong> se pueden incluir solo las
-            frecuencias estadísticamente significativas.
-          </li>
-        </ul>
+      <Callout type="warning" title="Error frecuente: usar dummies con series de alta frecuencia">
+        <p>
+          Para datos semanales (<I c="s = 52" />) o diarios (<I c="s = 365" />),
+          el enfoque de dummies requiere 51 o 364 parámetros solo para la
+          estacionalidad —computacionalmente costoso y estadísticamente
+          ineficiente. En esos casos, las funciones trigonométricas con pocos
+          armónicos son prácticamente la única opción razonable.
+        </p>
       </Callout>
 
       {/* ── SVG periodograma ────────────────────────────── */}
@@ -414,9 +529,21 @@ ggplot(df3, aes(x = Año)) +
           <text x={60+116*2.5} y={104} textAnchor="middle" fill="#0891b2" fontSize="10" fontWeight="600" fontFamily="Inter">F=3/12</text>
         </svg>
         <p className="text-xs text-stone-400 text-center mt-2">
-          Figura 3.1 — Periodograma con picos dominantes en F = 1/12 (ciclo anual) y sus armónicos. Los primeros 3 armónicos capturan la mayor parte de la potencia estacional.
+          Figura 3.1 — Periodograma con picos en F = 1/12 (ciclo anual, primer armónico), F = 2/12 (semi-anual, segundo armónico) y F = 3/12 (cuatrimestral, tercer armónico). Incluir los tres primeros armónicos en Mytrigon() captura la mayor parte de la potencia estacional.
         </p>
       </div>
+
+      <Callout type="info" title="Conexión con el Módulo 4">
+        <p>
+          Hasta aquí has modelado tendencia sola (Módulo 2) y estacionalidad
+          sola (este módulo). En el <strong>Módulo 4</strong> los combinarás en
+          un único modelo que incluye ambas componentes simultáneamente:{" "}
+          <I c="Y_t = T_t + S_t + E_t" /> (o la versión multiplicativa en
+          escala log). También aprenderás a comparar múltiples especificaciones
+          con AIC/BIC y a aplicar la corrección de sesgo para pronósticos en
+          escala original.
+        </p>
+      </Callout>
     </div>
   );
 }
