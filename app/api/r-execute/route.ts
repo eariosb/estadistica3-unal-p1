@@ -43,8 +43,8 @@ async function isAuthenticated(req: NextRequest): Promise<boolean> {
   // return !!session?.user;
 
   // Opción B: verificar header personalizado (cuando el frontend lo envíe)
-  const authHeader = req.headers.get("x-session-token");
-  if (authHeader && authHeader.length > 10) return true;
+  //const authHeader = req.headers.get("x-session-token");
+  //if (authHeader && authHeader.length > 10) return true;
 
   // Opción C: acceso abierto para curso público (sin autenticación de usuarios)
   // Cambiar a false y habilitar Opción A cuando se quiera restringir acceso.
@@ -177,4 +177,5 @@ Verifica que el backend esté activo (${R_BACKEND_URL}).`,
 
 // Solo POST está permitido
 export async function GET() {
-  return NextResponse.json({ error: "M�
+  return NextResponse.json({ error: "Método no permitido." }, { status: 405 });
+}
