@@ -380,6 +380,10 @@ cat("\\nConclusion: MAPE similar → modelo aditivo preferible\\n")
 cat("(mas simple, no requiere correccion de sesgo)\\n")
 
 # ── Gráfico comparativo ───────────────────────────────────
+# Etiquetas dinámicas creadas antes de usarlas en aes()
+lab_adit <- sprintf("Aditivo (MAPE=%.1f%%)", MAPE_adit)
+lab_log  <- sprintf("Log     (MAPE=%.1f%%)", MAPE_log)
+
 df_uk <- data.frame(
   Año     = as.numeric(time(yt_uk)),
   Obs     = as.numeric(yt_uk),
@@ -390,14 +394,13 @@ df_uk <- data.frame(
 ggplot(df_uk, aes(x = Año)) +
   geom_line(aes(y = Obs,  colour = "Observado"),
             linewidth = 0.8, alpha = 0.85) +
-  geom_line(aes(y = Adit, colour = sprintf("Aditivo (MAPE=%.1f%%)", MAPE_adit)),
+  geom_line(aes(y = Adit, colour = lab_adit),
             linewidth = 1.3) +
-  geom_line(aes(y = Log,  colour = sprintf("Log (MAPE=%.1f%%)", MAPE_log)),
+  geom_line(aes(y = Log,  colour = lab_log),
             linewidth = 1.1, linetype = "dashed") +
   scale_colour_manual(
-    values = c("Observado" = "#78716c",
-               sprintf("Aditivo (MAPE=%.1f%%)", MAPE_adit) = "#16a34a",
-               sprintf("Log (MAPE=%.1f%%)", MAPE_log)  = "#dc2626")
+    values = setNames(c("#78716c", "#16a34a", "#dc2626"),
+                      c("Observado", lab_adit, lab_log))
   ) +
   labs(
     title    = "UKDriverDeaths — Modelo aditivo vs log-aditivo",
@@ -485,8 +488,8 @@ Mipoly <- function(tiempo, grado) {
 yt       <- AirPassengers
 n        <- length(yt)             # 144
 n_train  <- n - 24                 # 120 para entrenar
-yt_train <- yt[1:n_train]
-yt_test  <- yt[(n_train + 1):n]
+yt_train <- window(yt, end   = time(yt)[n_train])
+yt_test  <- window(yt, start = time(yt)[n_train + 1])
 
 # ── Modelo ajustado solo con datos de entrenamiento ───────
 t_train <- 1:n_train

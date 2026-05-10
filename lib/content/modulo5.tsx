@@ -402,7 +402,7 @@ y_tr     <- as.numeric(AirPassengers)
 ok       <- !is.na(ythat_tr)
 RMSE_tr  <- sqrt(mean((y_tr[ok] - ythat_tr[ok])^2))
 MAPE_tr  <- mean(abs((y_tr[ok] - ythat_tr[ok]) / y_tr[ok])) * 100
-cat(sprintf("RMSE = %.2f  |  MAPE = %.2f%%\\n", RMSE_tr, MAPE_tr)))`}
+cat(sprintf("RMSE = %.2f  |  MAPE = %.2f%%\\n", RMSE_tr, MAPE_tr))`}
         caption="stlf() es conveniente porque combina STL + un modelo automático para el residuo. El resultado incluye bandas de incertidumbre que se amplían con el horizonte."
       />
 

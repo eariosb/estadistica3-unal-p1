@@ -112,6 +112,7 @@ export function RExecutor({ code: originalCode, title, packages, caption }: RExe
   const [copied, setCopied] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [lineCount, setLineCount] = useState(0);
+  const [showFullOutput, setShowFullOutput] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lineNumbersRef = useRef<HTMLDivElement>(null);
 
@@ -176,6 +177,7 @@ export function RExecutor({ code: originalCode, title, packages, caption }: RExe
       };
 
       setResult(newResult);
+      setShowFullOutput(false);
       setHistory((prev) => [newResult, ...prev].slice(0, 5));
 
       if (newResult.error) {
@@ -454,13 +456,31 @@ export function RExecutor({ code: originalCode, title, packages, caption }: RExe
             )}
 
             {/* Output de consola */}
-            {displayResult.output && (
-              <div className="bg-[#141420] border-t border-slate-700 px-4 py-3 overflow-x-auto">
-                <pre className="text-emerald-300 text-xs font-mono whitespace-pre-wrap leading-relaxed">
-                  {displayResult.output}
-                </pre>
-              </div>
-            )}
+            {displayResult.output && (() => {
+              const OUTPUT_LIMIT = 12;
+              const lines = displayResult.output.split("\n");
+              const isTruncated = lines.length > OUTPUT_LIMIT && !showFullOutput;
+              const visibleText = isTruncated
+                ? lines.slice(0, OUTPUT_LIMIT).join("\n")
+                : displayResult.output;
+              return (
+                <div className="bg-[#141420] border-t border-slate-700 px-4 py-3 overflow-x-auto">
+                  <pre className="text-emerald-300 text-xs font-mono whitespace-pre-wrap leading-relaxed">
+                    {visibleText}
+                  </pre>
+                  {lines.length > OUTPUT_LIMIT && (
+                    <button
+                      onClick={() => setShowFullOutput((v) => !v)}
+                      className="mt-2 text-xs text-slate-500 hover:text-slate-300 font-mono transition-colors flex items-center gap-1"
+                    >
+                      {showFullOutput
+                        ? "▲ colapsar salida"
+                        : `▼ +${lines.length - OUTPUT_LIMIT} líneas más…`}
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Sin output ni error */}
             {!displayResult.error &&
@@ -516,7 +536,7 @@ export function RExecutor({ code: originalCode, title, packages, caption }: RExe
         {/* Caption */}
         {caption && (
           <div className="bg-slate-900 px-4 py-2 border-t border-slate-700">
-            <p className="text-slate-400 text-xs italic">{caption}</p>
+            <p className="text-slate-300 text-xs italic">{caption}</p>
           </div>
         )}
       </div>

@@ -128,7 +128,7 @@ export function CodeBlock({
 
       {caption && (
         <div className="bg-slate-900 px-4 py-2 border-t border-slate-700">
-          <p className="text-slate-400 text-xs italic">{caption}</p>
+          <p className="text-slate-300 text-xs italic">{caption}</p>
         </div>
       )}
     </div>
