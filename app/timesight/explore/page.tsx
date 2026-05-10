@@ -350,6 +350,46 @@ export default function ExplorePage() {
             </div>
           )}
 
+          {/* Análisis estacional — season plot + subseries */}
+          {r.plots.length > 3 && (
+            <div className="space-y-4">
+              <h2 className="font-semibold text-stone-800">
+                Análisis del patrón estacional
+                <TooltipIcon text="Dos gráficos clave para decidir si la estacionalidad es ADITIVA (amplitud constante → usar dummies directamente) o MULTIPLICATIVA (amplitud crece → usar log + dummies). Son el paso más importante antes de especificar el modelo." />
+              </h2>
+              <div className="p-3 bg-violet-50 border border-violet-200 rounded-xl text-xs text-violet-800 leading-relaxed">
+                <strong>Cómo leer estos gráficos:</strong>{' '}
+                En el <em>patrón por año</em>, si las líneas de años recientes están mucho más separadas que las antiguas → amplitud creciente → modelo <strong>multiplicativo</strong> (usar log).
+                En el <em>subseries</em>, si la línea de cada mes sube con pendiente pronunciada → el nivel promedio de ese mes crece → confirma multiplicativo.
+                Si las líneas son paralelas y planas → modelo <strong>aditivo</strong>.
+              </div>
+              {/* Season plot + boxplot */}
+              <div>
+                <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
+                  Season plot — cada año como línea · Boxplot por período
+                </p>
+                <RPlot
+                  b64={r.plots[3]}
+                  alt="Season plot y boxplot estacional"
+                  caption="Izquierda: cada línea es un año. Amplitud creciente → multiplicativo. Derecha: cajas más altas en verano con rango creciente confirman multiplicativo."
+                />
+              </div>
+              {/* Subseries plot */}
+              {r.plots.length > 4 && (
+                <div>
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
+                    Subseries — evolución histórica de cada período
+                  </p>
+                  <RPlot
+                    b64={r.plots[4]}
+                    alt="Subseries plot"
+                    caption="Cada panel = un mes. La línea azul horizontal es el promedio histórico. Si la secuencia de puntos sube → el promedio de ese mes crece con el tiempo."
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ACF / PACF */}
           <div>
             <h2 className="font-semibold text-stone-800 mb-3">

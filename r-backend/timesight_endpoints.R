@@ -122,7 +122,83 @@ ts_explore <- function(values, freq, start, name = "Serie") {
          col = "#7c3aed", lwd = 2, ci.col = "#c4b5fd")
   })
 
-  plots <- Filter(Negate(is.null), list(plot1, plot2, plot3))
+  # Gráfico 4: Season plot + boxplot (solo cuando hay estacionalidad)
+  plot4 <- NULL
+  if (freq > 1 && n >= 2 * freq) {
+    plot4 <- tryCatch({
+      ts_png_b64(function() {
+        # Etiquetas de período
+        if (freq == 12)     per_labels <- month.abb
+        else if (freq == 4) per_labels <- paste0("T", 1:4)
+        else                per_labels <- paste0("S", seq_len(freq))
+
+        n_full <- floor(n / freq)            # ciclos completos
+        y_full <- as.numeric(y)[seq_len(n_full * freq)]
+        mat    <- matrix(y_full, nrow = freq, byrow = FALSE)
+
+        start_yr <- if (length(start) >= 1) start[1] else 1
+        years    <- start_yr + seq_len(n_full) - 1L
+
+        par(mfrow = c(1, 2), mar = c(5, 4, 3.5, 1), family = "sans")
+
+        # ── Panel 1: patrón estacional por año ───────────────
+        cols <- colorRampPalette(
+          c("#3b82f6","#8b5cf6","#ec4899","#f97316","#10b981")
+        )(n_full)
+        matplot(mat, type = "l", lty = 1, lwd = 1.6, col = cols,
+                xaxt = "n",
+                main = "Patrón estacional por año",
+                sub  = "¿Crece la amplitud? → modelo multiplicativo",
+                xlab = "Período", ylab = name, bty = "l",
+                cex.main = 0.95, cex.sub = 0.8, font.sub = 3)
+        axis(1, at = seq_len(freq), labels = per_labels,
+             las = 2, cex.axis = 0.75)
+        grid(col = "#e7e5e4", lty = 1)
+        if (n_full <= 20) {
+          legend("topleft", legend = years, col = cols, lty = 1,
+                 cex = 0.55, ncol = max(1L, ceiling(n_full / 10L)),
+                 bty = "n")
+        }
+
+        # ── Panel 2: boxplot por período ─────────────────────
+        cyc <- as.integer(cycle(y))
+        boxplot(as.numeric(y) ~ cyc,
+                names  = per_labels, col = "#dbeafe", border = "#1d4ed8",
+                main   = "Distribución por período",
+                sub    = "Caja uniforme → aditivo · caja creciente → multiplicativo",
+                xlab   = "Período", ylab = name,
+                outline = TRUE, cex.axis = 0.75, bty = "l",
+                las = 2, cex.main = 0.95, cex.sub = 0.8, font.sub = 3)
+        grid(col = "#e7e5e4", lty = 1)
+      }, width = 820, height = 430)
+    }, error = function(e) NULL)
+  }
+
+  # Gráfico 5: Subseries plot (solo cuando hay estacionalidad)
+  plot5 <- NULL
+  if (freq > 1 && n >= 2 * freq) {
+    plot5 <- tryCatch({
+      ts_png_b64(function() {
+        if (freq == 12)     per_labels <- month.abb
+        else if (freq == 4) per_labels <- paste0("T", 1:4)
+        else                per_labels <- paste0("S", seq_len(freq))
+        par(mar = c(4.5, 4, 3.5, 1), family = "sans")
+        monthplot(y,
+                  labels  = per_labels,
+                  col     = "#374151",
+                  lwd     = 1.2,
+                  col.base = "#1d4ed8",
+                  lwd.base = 2.5,
+                  main    = "Subseries por mes — media horizontal = promedio del mes",
+                  sub     = "Línea azul: media histórica del período · Pendiente creciente → amplitud aumenta (multiplicativo)",
+                  xlab    = "Mes", ylab = name,
+                  bty     = "l", cex.main = 0.95, cex.sub = 0.78, font.sub = 3)
+        grid(col = "#e7e5e4", lty = 1)
+      }, width = 820, height = 430)
+    }, error = function(e) NULL)
+  }
+
+  plots <- Filter(Negate(is.null), list(plot1, plot2, plot3, plot4, plot5))
 
   # ── Respuesta ──────────────────────────────────────────────────────────────
   c(

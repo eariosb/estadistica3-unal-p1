@@ -98,8 +98,108 @@ export function Modulo3Content() {
         </div>
       </div>
 
+      {/* ── Diagnóstico visual de la estacionalidad ─────── */}
+      <h2 id="diagnostico-visual">3.2 Antes de modelar: tres gráficos diagnósticos</h2>
+      <p>
+        Antes de elegir el tipo de modelo estacional —aditivo o multiplicativo,
+        dummies o Fourier— hay tres gráficos que deberías producir siempre.
+        Juntos responden dos preguntas críticas: ¿la amplitud estacional es
+        constante o crece con el nivel de la serie? ¿El patrón se repite
+        fielmente año tras año o evoluciona?
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 my-4">
+        {[
+          {
+            n: "1", title: "Season plot",
+            desc: "Cada año como línea independiente. Si las líneas recientes están muy por encima de las antiguas → amplitud creciente → modelo multiplicativo (usar log).",
+            color: "border-blue-300 bg-blue-50", tc: "text-blue-800",
+          },
+          {
+            n: "2", title: "Subseries plot",
+            desc: "Cada período en su propio panel vertical. La línea azul = promedio histórico del período. Si la secuencia de años sube dentro de cada panel → nivel del período crece → multiplicativo.",
+            color: "border-violet-300 bg-violet-50", tc: "text-violet-800",
+          },
+          {
+            n: "3", title: "Boxplot por período",
+            desc: "La altura de cada caja = dispersión a lo largo de los años. Cajas más grandes en los meses pico que en los valles → varianza heterogénea → multiplicativo.",
+            color: "border-emerald-300 bg-emerald-50", tc: "text-emerald-800",
+          },
+        ].map(({ n, title, desc, color, tc }) => (
+          <div key={n} className={`p-3 rounded-lg border ${color}`}>
+            <p className={`text-xs font-bold ${tc} mb-1`}>Gráfico {n}: {title}</p>
+            <p className="text-xs text-stone-600">{desc}</p>
+          </div>
+        ))}
+      </div>
+
+      <Callout type="formula" title="Regla de decisión rápida">
+        <p>
+          Si los tres gráficos coinciden en mostrar amplitud creciente →{" "}
+          <strong>modelo multiplicativo: aplicar <code>log()</code></strong>{" "}
+          a la serie antes de ajustar. Si la amplitud es constante →{" "}
+          <strong>modelo aditivo: trabajar con la serie original</strong>.
+          Si los gráficos muestran señales mixtas, el AIC comparando ambos
+          modelos es el árbitro final.
+        </p>
+      </Callout>
+
+      <CodeBlock
+        executable={true}
+        packages={["forecast"]}
+        title="▶ AirPassengers — Season plot · Subseries · Boxplot"
+        code={`library(forecast)
+
+yt  <- AirPassengers
+mes <- cycle(yt)
+mes_labels <- c("Ene","Feb","Mar","Abr","May","Jun",
+                "Jul","Ago","Sep","Oct","Nov","Dic")
+
+# ── 1. Season plot: cada año como línea ──────────────────
+n_years <- 12
+cols_yr  <- colorRampPalette(
+  c("#3b82f6","#8b5cf6","#ec4899","#f97316"))(n_years)
+
+mat_ap <- matrix(as.numeric(yt), nrow = 12)   # 12 meses × 12 años
+matplot(mat_ap, type = "l", lty = 1, lwd = 1.8, col = cols_yr,
+        xaxt = "n",
+        main = "Patrón estacional por año — ¿crece la amplitud?",
+        xlab = "Mes", ylab = "Pasajeros (miles)", bty = "l")
+axis(1, at = 1:12, labels = mes_labels, las = 2, cex.axis = 0.8)
+legend("topleft", legend = 1949:1960, col = cols_yr, lty = 1,
+       cex = 0.6, ncol = 3, bty = "n")
+grid(col = "#e7e5e4")
+# Las líneas de 1958–1960 están muy por encima de 1949 → multiplicativo
+
+# ── 2. Subseries plot: evolución histórica por mes ────────
+monthplot(yt,
+          labels   = mes_labels,
+          col      = "#374151", lwd = 1.2,
+          col.base = "#1d4ed8", lwd.base = 2.5,
+          main     = "Subseries — media horizontal = promedio del mes",
+          xlab     = "Mes", ylab = "Pasajeros (miles)", bty = "l")
+grid(col = "#e7e5e4")
+# Todos los paneles suben → el nivel promedio crece → multiplicativo
+
+# ── 3. Boxplot: ¿la dispersión es proporcional al nivel? ─
+boxplot(as.numeric(yt) ~ mes,
+        names = mes_labels, col = "#dbeafe", border = "#1d4ed8",
+        main  = "Distribución por mes (AirPassengers)",
+        xlab  = "Mes", ylab = "Pasajeros (miles)")
+grid(col = "#e7e5e4")
+# Cajas de jul/ago son mucho más grandes que ene/feb → multiplicativo
+
+# ── Verificación numérica de la amplitud ─────────────────
+amp_1 <- diff(range(tapply(as.numeric(yt)[1:72],   cycle(yt)[1:72],   mean)))
+amp_2 <- diff(range(tapply(as.numeric(yt)[73:144], cycle(yt)[73:144], mean)))
+cat(sprintf("Amplitud 1ª mitad: %.1f  |  2ª mitad: %.1f  |  ratio: %.2f\\n",
+            amp_1, amp_2, amp_2 / amp_1))
+# ratio > 1.5 → amplitud creció → confirma usar modelo log`}
+        caption="Los tres gráficos para AirPassengers confirman multiplicativo: season plot con líneas separándose, subseries con pendientes positivas en todos los meses, boxplot con cajas más grandes en los meses pico."
+      />
+
       {/* ── Ejemplo nottem ──────────────────────────────── */}
-      <h2 id="ejemplo-nottem">3.2 Ejemplo A — nottem: temperatura mensual de Nottingham</h2>
+      <h2 id="ejemplo-nottem">3.3 Ejemplo A — nottem: temperatura mensual de Nottingham</h2>
       <p>
         El dataset <code>nottem</code> (base R) registra la temperatura media
         mensual en grados Fahrenheit en Nottingham Castle, de enero de 1920 a

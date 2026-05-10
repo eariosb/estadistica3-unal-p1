@@ -136,32 +136,53 @@ cat("Grado óptimo:", which.min(aics), "\n")`
           bg: "bg-violet-50",
           tc: "text-violet-800",
           items: [
-            "Patrón estable cada año → variables indicadoras (seasonaldummy)",
-            "Patrón que evoluciona → funciones trigonométricas o STL",
-            "Verificar con boxplot por mes si la forma cambia",
+            "Season plot: cada año como línea — ¿se separan hacia arriba? → multiplicativo",
+            "Subseries plot: cada mes en su panel — ¿pendiente creciente en todos? → multiplicativo",
+            "Boxplot por período: cajas más grandes en meses pico → varianza heterogénea → multiplicativo",
+            "Si los 3 coinciden en amplitud creciente → log(); si son planos → serie original",
+            "Patrón estable año a año → dummies (seasonaldummy); patrón evolutivo → Fourier o STL",
           ],
-          code: `# ── AirPassengers: verificar patrón estacional ───────────
+          code: `# ── AirPassengers: diagnóstico estacional completo ───────
 library(forecast)
-yt <- AirPassengers
 
-# Extraer mes y año
+yt  <- AirPassengers
 mes <- cycle(yt)
 mes_labels <- c("Ene","Feb","Mar","Abr","May","Jun",
                 "Jul","Ago","Sep","Oct","Nov","Dic")
 
-# Temperatura media por mes — ¿cambia el rango?
-boxplot(as.numeric(yt) ~ mes,
-        names = mes_labels,
-        col = "#dbeafe",
-        main = "Distribución de pasajeros por mes (AirPassengers)",
-        xlab = "Mes", ylab = "Pasajeros (miles)")
+# ── 1. Season plot: cada año como línea ──────────────────
+cols_yr <- colorRampPalette(c("#3b82f6","#8b5cf6","#ec4899","#f97316"))(12)
+mat_ap  <- matrix(as.numeric(yt), nrow = 12)
+matplot(mat_ap, type = "l", lty = 1, lwd = 1.8, col = cols_yr,
+        xaxt = "n",
+        main = "Season plot — ¿crece la amplitud año a año?",
+        xlab = "Mes", ylab = "Pasajeros (miles)", bty = "l")
+axis(1, at = 1:12, labels = mes_labels, las = 2, cex.axis = 0.8)
+legend("topleft", legend = 1949:1960, col = cols_yr, lty = 1,
+       cex = 0.6, ncol = 3, bty = "n")
+grid(col = "#e7e5e4")
 
-# Medias y comparar primera vs segunda mitad
-med_mes_1 <- tapply(as.numeric(yt)[1:72],  cycle(yt)[1:72],  mean)
-med_mes_2 <- tapply(as.numeric(yt)[73:144], cycle(yt)[73:144], mean)
-cat("Amplitud 1ª mitad:", round(diff(range(med_mes_1)), 1), "\n")
-cat("Amplitud 2ª mitad:", round(diff(range(med_mes_2)), 1), "\n")
-# Amplitud creciente → estacionalidad multiplicativa (usar log + dummies)`
+# ── 2. Subseries plot: evolución por mes ─────────────────
+monthplot(yt,
+          labels = mes_labels, col = "#374151", lwd = 1.2,
+          col.base = "#1d4ed8", lwd.base = 2.5,
+          main = "Subseries — línea azul = promedio histórico del mes",
+          xlab = "Mes", ylab = "Pasajeros (miles)", bty = "l")
+grid(col = "#e7e5e4")
+
+# ── 3. Boxplot: ¿la dispersión crece con el nivel? ───────
+boxplot(as.numeric(yt) ~ mes,
+        names = mes_labels, col = "#dbeafe", border = "#1d4ed8",
+        main = "Distribución por mes — ¿cajas más grandes en picos?",
+        xlab = "Mes", ylab = "Pasajeros (miles)")
+grid(col = "#e7e5e4")
+
+# ── 4. Verificación numérica ─────────────────────────────
+amp_1 <- diff(range(tapply(as.numeric(yt)[1:72],   cycle(yt)[1:72],   mean)))
+amp_2 <- diff(range(tapply(as.numeric(yt)[73:144], cycle(yt)[73:144], mean)))
+cat(sprintf("Amplitud 1a mitad: %.1f | 2a mitad: %.1f | ratio: %.2f\\n",
+            amp_1, amp_2, amp_2 / amp_1))
+# ratio > 1.5 → multiplicativo → usar log() + seasonaldummy()`
         },
         {
           n: "05",
