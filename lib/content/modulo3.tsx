@@ -161,32 +161,38 @@ cols_yr  <- colorRampPalette(
   c("#3b82f6","#8b5cf6","#ec4899","#f97316"))(n_years)
 
 mat_ap <- matrix(as.numeric(yt), nrow = 12)   # 12 meses × 12 años
-matplot(mat_ap, type = "l", lty = 1, lwd = 1.8, col = cols_yr,
-        xaxt = "n",
-        main = "Patrón estacional por año — ¿crece la amplitud?",
-        xlab = "Mes", ylab = "Pasajeros (miles)", bty = "l")
-axis(1, at = 1:12, labels = mes_labels, las = 2, cex.axis = 0.8)
-legend("topleft", legend = 1949:1960, col = cols_yr, lty = 1,
-       cex = 0.6, ncol = 3, bty = "n")
-grid(col = "#e7e5e4")
+{
+  matplot(mat_ap, type = "l", lty = 1, lwd = 1.8, col = cols_yr,
+          xaxt = "n",
+          main = "Patrón estacional por año — ¿crece la amplitud?",
+          xlab = "Mes", ylab = "Pasajeros (miles)", bty = "l")
+  axis(1, at = 1:12, labels = mes_labels, las = 2, cex.axis = 0.8)
+  legend("topleft", legend = 1949:1960, col = cols_yr, lty = 1,
+         cex = 0.6, ncol = 3, bty = "n")
+  grid(col = "#e7e5e4")
+}
 # Las líneas de 1958–1960 están muy por encima de 1949 → multiplicativo
 
 # ── 2. Subseries plot: evolución histórica por mes ────────
-monthplot(yt,
-          labels   = mes_labels,
-          col      = "#374151", lwd = 1.2,
-          col.base = "#1d4ed8", lwd.base = 2.5,
-          main     = "Subseries — media horizontal = promedio del mes",
-          xlab     = "Mes", ylab = "Pasajeros (miles)", bty = "l")
-grid(col = "#e7e5e4")
+{
+  monthplot(yt,
+            labels   = mes_labels,
+            col      = "#374151", lwd = 1.2,
+            col.base = "#1d4ed8", lwd.base = 2.5,
+            main     = "Subseries — media horizontal = promedio del mes",
+            xlab     = "Mes", ylab = "Pasajeros (miles)", bty = "l")
+  grid(col = "#e7e5e4")
+}
 # Todos los paneles suben → el nivel promedio crece → multiplicativo
 
 # ── 3. Boxplot: ¿la dispersión es proporcional al nivel? ─
-boxplot(as.numeric(yt) ~ mes,
-        names = mes_labels, col = "#dbeafe", border = "#1d4ed8",
-        main  = "Distribución por mes (AirPassengers)",
-        xlab  = "Mes", ylab = "Pasajeros (miles)")
-grid(col = "#e7e5e4")
+{
+  boxplot(as.numeric(yt) ~ mes,
+          names = mes_labels, col = "#dbeafe", border = "#1d4ed8",
+          main  = "Distribución por mes (AirPassengers)",
+          xlab  = "Mes", ylab = "Pasajeros (miles)")
+  grid(col = "#e7e5e4")
+}
 # Cajas de jul/ago son mucho más grandes que ene/feb → multiplicativo
 
 # ── Verificación numérica de la amplitud ─────────────────
