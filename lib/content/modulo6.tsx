@@ -50,15 +50,19 @@ export function Modulo6Content() {
 yt <- AirPassengers      # ts mensual 1949-1960, s=12
 n  <- length(yt)
 
-{
-par(mfrow = c(2, 2))
-plot(yt, main = "Serie original", col = "#1d4ed8", lwd = 1.5)
-plot(log(yt), main = "log(Yt) — varianza estabilizada",
-     col = "#7c3aed", lwd = 1.5)
+# Gráfico 1: serie original
+{ plot(yt, main = "Serie original", col = "#1d4ed8", lwd = 1.5) }
+
+# Gráfico 2: log(Yt) — varianza estabilizada
+{ plot(log(yt), main = "log(Yt) — varianza estabilizada",
+       col = "#7c3aed", lwd = 1.5) }
+
+# Gráfico 3: descomposición multiplicativa (4 paneles propios)
 plot(decompose(yt, type = "multiplicative"))
-acf(yt, lag.max = 36, main = "ACF — detectar periodicidad s")
-par(mfrow = c(1, 1))
-}
+
+# Gráfico 4: ACF para detectar periodicidad s
+{ acf(yt, lag.max = 36, main = "ACF — detectar periodicidad s") }
+
 cat("Rango serie:", range(yt), "\n")
 cat("Varianza primera mitad:", var(yt[1:(n/2)]), "\n")
 cat("Varianza segunda mitad:", var(yt[(n/2+1):n]), "\n")`
@@ -153,29 +157,35 @@ mes_labels <- c("Ene","Feb","Mar","Abr","May","Jun",
 # ── 1. Season plot: cada año como línea ──────────────────
 cols_yr <- colorRampPalette(c("#3b82f6","#8b5cf6","#ec4899","#f97316"))(12)
 mat_ap  <- matrix(as.numeric(yt), nrow = 12)
-matplot(mat_ap, type = "l", lty = 1, lwd = 1.8, col = cols_yr,
-        xaxt = "n",
-        main = "Season plot — ¿crece la amplitud año a año?",
-        xlab = "Mes", ylab = "Pasajeros (miles)", bty = "l")
-axis(1, at = 1:12, labels = mes_labels, las = 2, cex.axis = 0.8)
-legend("topleft", legend = 1949:1960, col = cols_yr, lty = 1,
-       cex = 0.6, ncol = 3, bty = "n")
-grid(col = "#e7e5e4")
+{
+  matplot(mat_ap, type = "l", lty = 1, lwd = 1.8, col = cols_yr,
+          xaxt = "n",
+          main = "Season plot — ¿crece la amplitud año a año?",
+          xlab = "Mes", ylab = "Pasajeros (miles)", bty = "l")
+  axis(1, at = 1:12, labels = mes_labels, las = 2, cex.axis = 0.8)
+  legend("topleft", legend = 1949:1960, col = cols_yr, lty = 1,
+         cex = 0.6, ncol = 3, bty = "n")
+  grid(col = "#e7e5e4")
+}
 
 # ── 2. Subseries plot: evolución por mes ─────────────────
-monthplot(yt,
-          labels = mes_labels, col = "#374151", lwd = 1.2,
-          col.base = "#1d4ed8", lwd.base = 2.5,
-          main = "Subseries — línea azul = promedio histórico del mes",
-          xlab = "Mes", ylab = "Pasajeros (miles)", bty = "l")
-grid(col = "#e7e5e4")
+{
+  monthplot(yt,
+            labels = mes_labels, col = "#374151", lwd = 1.2,
+            col.base = "#1d4ed8", lwd.base = 2.5,
+            main = "Subseries — línea azul = promedio histórico del mes",
+            xlab = "Mes", ylab = "Pasajeros (miles)", bty = "l")
+  grid(col = "#e7e5e4")
+}
 
 # ── 3. Boxplot: ¿la dispersión crece con el nivel? ───────
-boxplot(as.numeric(yt) ~ mes,
-        names = mes_labels, col = "#dbeafe", border = "#1d4ed8",
-        main = "Distribución por mes — ¿cajas más grandes en picos?",
-        xlab = "Mes", ylab = "Pasajeros (miles)")
-grid(col = "#e7e5e4")
+{
+  boxplot(as.numeric(yt) ~ mes,
+          names = mes_labels, col = "#dbeafe", border = "#1d4ed8",
+          main = "Distribución por mes — ¿cajas más grandes en picos?",
+          xlab = "Mes", ylab = "Pasajeros (miles)")
+  grid(col = "#e7e5e4")
+}
 
 # ── 4. Verificación numérica ─────────────────────────────
 amp_1 <- diff(range(tapply(as.numeric(yt)[1:72],   cycle(yt)[1:72],   mean)))
