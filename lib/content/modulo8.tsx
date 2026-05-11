@@ -301,33 +301,43 @@ ggplot(df, aes(x = t)) +
           executable={true}
           packages={["forecast"]}
           title="▶ Ejemplo ejecutable: nottem — prueba t de efectos estacionales"
-          code={`yt <- nottem          # ts mensual, s = 12, n = 240  (pre-cargado)
+          code={`library(forecast)
+library(ggplot2)
+
+yt <- nottem          # ts mensual, s = 12, n = 240  (pre-cargado)
 n  <- length(yt)
-t  <- 1:n
+
+# Nombres de los 12 meses en español
+meses_nom <- c("Ene","Feb","Mar","Abr","May","Jun",
+               "Jul","Ago","Sep","Oct","Nov","Dic")
 
 # ── Modelo solo estacional (sin tendencia detectada) ──────
-mes_dum <- seasonaldummy(yt)     # 11 indicadoras; ref = diciembre
-mod_est <- lm(as.numeric(yt) ~ mes_dum)
-sm      <- summary(mod_est)
+# Usar data.frame + lm(yt ~ .) para que los nombres de
+# coeficientes sean legibles (Ene...Nov, ref = Dic)
+mes_dum            <- seasonaldummy(yt)    # 11 cols; ref = Dic
+colnames(mes_dum)  <- meses_nom[-12]      # renombrar Ene...Nov
+datos_est          <- data.frame(yt = as.numeric(yt), mes_dum)
+mod_est            <- lm(yt ~ ., data = datos_est)
+sm                 <- summary(mod_est)
 
 # ── Tabla de coeficientes estacionales ────────────────────
 cat("Coeficientes estacionales (ref = diciembre):\n")
-cf_est <- sm$coef[-1, ]          # quitar intercepto
+cf_est <- sm$coef[-1, ]          # quitar intercepto (11 filas)
 print(round(cf_est, 4))
 
 # ── ¿Qué meses no difieren significativamente de diciembre?
-p_vals <- cf_est[, "Pr(>|t|)"]
-cat("\nMeses NO significativos (p > 0.05):\n",
-    names(p_vals[p_vals > 0.05]))
+p_vals <- cf_est[, "Pr(>|t|)"]   # longitud 11
+no_sig <- names(p_vals[p_vals > 0.05])
+cat("\nMeses NO significativos (p > 0.05):",
+    if (length(no_sig) == 0) "ninguno" else no_sig, "\n")
 
 # ── Gráfico de efectos estacionales ──────────────────────
-coefs  <- coef(mod_est)
-deltas <- c(coefs[-1], 0)    # añadir referencia Dic = 0
-meses  <- c(month.abb, "Dic")
+coefs  <- coef(mod_est)           # 12 valores (intercepto + 11)
+deltas <- c(coefs[-1], 0)        # 11 deltas + 0 para Dic = 12 valores
 df_d   <- data.frame(
-  mes    = factor(meses, levels = meses),
-  delta  = deltas,
-  sig    = c(p_vals < 0.05, TRUE)
+  mes   = factor(meses_nom, levels = meses_nom),   # 12
+  delta = deltas,                                   # 12
+  sig   = c(p_vals < 0.05, TRUE)                   # 11 + TRUE(Dic) = 12
 )
 
 ggplot(df_d, aes(x = mes, y = delta, fill = delta > 0)) +
@@ -336,10 +346,10 @@ ggplot(df_d, aes(x = mes, y = delta, fill = delta > 0)) +
   geom_text(aes(label = ifelse(!sig, "ns", ""),
                 y = delta + sign(delta) * 0.3),
             size = 3, color = "#ef4444") +
-  scale_fill_manual(values = c("#3b82f6", "#ef4444")) +
-  labs(title = "Efectos estacionales δ̂ᵢ — Temperatura Nottingham Castle",
+  scale_fill_manual(values = c("FALSE" = "#3b82f6", "TRUE" = "#ef4444")) +
+  labs(title = "Efectos estacionales delta_i — Temperatura Nottingham Castle",
        subtitle = "Referencia: diciembre. 'ns' = no significativo (p > 0.05)",
-       x = "Mes", y = "δ̂ᵢ (°F vs diciembre)") +
+       x = "Mes", y = "delta_i (°F vs diciembre)") +
   theme_bw(base_size = 12)`}
           caption="Todos los meses resultan significativos para nottem: hay patrón estacional claro con máximo en julio (+21°F vs diciembre)."
         />

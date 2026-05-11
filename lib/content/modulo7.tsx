@@ -241,7 +241,7 @@ yt <- nottem        # ts mensual 1920-1939, °F
 n  <- length(yt)
 t  <- 1:n
 
-# ── Exploración con ggplot2 (evita plot.new issues) ──────
+# ── Exploración con ggplot2 ───────────────────────────────
 df_yt <- data.frame(
   Año = as.numeric(time(yt)),
   Tmp = as.numeric(yt)
@@ -265,8 +265,11 @@ ggplot(df_yt, aes(x = Año, y = Tmp)) +
   theme_bw(base_size = 12)
 
 # ── Modelo solo estacional ─────────────────────────────────
-mes_dum <- seasonaldummy(yt)   # Ene, Feb, ..., Nov (ref = Dic)
-mod_est  <- lm(as.numeric(yt) ~ mes_dum)
+# IMPORTANTE: usar data.frame + lm(yt ~ .) en lugar de lm(yt ~ mes_dum)
+# para que predict() encuentre las variables por nombre en newdata
+mes_dum   <- seasonaldummy(yt)      # 11 columnas: Ene…Nov (ref = Dic)
+datos_est <- data.frame(yt = as.numeric(yt), mes_dum)
+mod_est   <- lm(yt ~ ., data = datos_est)
 cat("\nR² ajustado:", round(summary(mod_est)$adj.r.squared, 4), "\n")
 
 # ── Efectos mensuales ─────────────────────────────────────
@@ -277,7 +280,7 @@ meses  <- c("Ene","Feb","Mar","Abr","May","Jun",
             "Jul","Ago","Sep","Oct","Nov")
 cat(sprintf("Media de diciembre (referencia): %.2f °F\n", beta0))
 for (i in seq_along(meses))
-  cat(sprintf("  %s: %.2f °F  (δ = %+.2f)\n",
+  cat(sprintf("  %s: %.2f °F  (delta = %+.2f)\n",
               meses[i], beta0 + deltas[i], deltas[i]))
 
 # ── Gráfico de efectos con ggplot2 ────────────────────────
@@ -308,12 +311,12 @@ cat("--- Ljung-Box ---\n")
 print(Box.test(e_est, lag = 24, type = "Ljung-Box"))
 
 # ── Pronóstico (repetir patrón estacional) ────────────────
-h       <- 12
-mes_fut <- seasonaldummy(yt, h = h)
-# Alinear nombres con los del modelo
-colnames(mes_fut) <- colnames(mes_dum)
+# seasonaldummy(yt, h) produce columnas con los mismos nombres que
+# seasonaldummy(yt), por lo que predict() los empareja correctamente
+h        <- 12
+mes_fut  <- as.data.frame(seasonaldummy(yt, h = h))
 pred_not <- predict(mod_est,
-                    newdata = as.data.frame(mes_fut),
+                    newdata  = mes_fut,
                     interval = "prediction", level = 0.95)
 
 cat("\nProyección 1 año adelante:\n")

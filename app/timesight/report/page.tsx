@@ -35,6 +35,8 @@ export default function ReportPage() {
   const handlePrint = () => window.print()
 
   const formatStart = (s: [number, number]) => `${s[0]} (período ${s[1]})`
+  const safeFixed = (v: number | null | undefined, d = 4) =>
+    v != null && isFinite(v) ? v.toFixed(d) : 'n/d'
 
   return (
     <div>
@@ -50,7 +52,7 @@ export default function ReportPage() {
         <Step label="Datos cargados" ok={!!series}
           detail={series ? `${series.name} | n=${series.n} | ${FREQ_LABELS[series.freq]} | inicio: ${formatStart(series.start)}` : undefined} />
         <Step label="Exploración completada" ok={!!exploreResult}
-          detail={exploreResult ? `ADF p=${exploreResult.adf.pvalue.toFixed(4)}, KPSS p=${exploreResult.kpss.pvalue.toFixed(4)}` : undefined} />
+          detail={exploreResult ? `ADF p=${safeFixed(exploreResult.adf.pvalue)}, KPSS p=${safeFixed(exploreResult.kpss.pvalue)}` : undefined} />
         <Step label="Transformación aplicada" ok={!!transformedSeries}
           detail={transformedSeries ? `Código: ${transformCode}` : 'Ninguna (serie original)'} />
         <Step label="Modelo ajustado" ok={!!fittedModel}
@@ -89,8 +91,8 @@ export default function ReportPage() {
                 rango=[{exploreResult.min?.toFixed(2)}, {exploreResult.max?.toFixed(2)}].
               </p>
               <p className="text-sm text-stone-700 mt-1">
-                <strong>ADF:</strong> {exploreResult.adf.interpretation} (p={exploreResult.adf.pvalue.toFixed(4)}).
-                <strong className="ml-2">KPSS:</strong> {exploreResult.kpss.interpretation} (p={exploreResult.kpss.pvalue.toFixed(4)}).
+                <strong>ADF:</strong> {exploreResult.adf.interpretation} (p={safeFixed(exploreResult.adf.pvalue)}).
+                <strong className="ml-2">KPSS:</strong> {exploreResult.kpss.interpretation} (p={safeFixed(exploreResult.kpss.pvalue)}).
               </p>
             </section>
           )}
@@ -129,7 +131,7 @@ export default function ReportPage() {
               <ul className="mt-1 space-y-0.5">
                 {diagnostics.tests.map((t) => (
                   <li key={t.name} className="text-xs text-stone-600">
-                    {t.passed ? '✅' : '⚠️'} {t.name}: p={t.pvalue.toFixed(4)} — {t.interpretation}
+                    {t.passed ? '✅' : '⚠️'} {t.name}: p={safeFixed(t.pvalue)} — {t.interpretation}
                   </li>
                 ))}
               </ul>
