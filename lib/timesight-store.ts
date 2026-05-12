@@ -82,6 +82,15 @@ export interface CrossValResult {
   initialWindow: number
   horizon: number
 }
+export interface BackTransformResult {
+  transformDesc: string
+  backtransformFormula: string
+  smearingFactor: number
+  r2: number
+  externalTransform: string
+  plots: string[]
+}
+
 
 export interface ForecastResult {
   forecast: number[]; lower80: number[]; upper80: number[]
@@ -109,6 +118,7 @@ export interface AnalysisState {
   confidenceLevel: number
   biasCorrection: BiasCorrection
   crossValResult: CrossValResult | null
+  backTransformResult: BackTransformResult | null
   forecastResult: ForecastResult | null
   loadingStep: string | null
   errorMessage: string | null
@@ -123,7 +133,7 @@ const INITIAL: AnalysisState = {
   transformedSeries: null, transformCode: '', transformResult: null,
   modelParams: DEFAULT_MODEL_PARAMS, fittedModel: null, diagnostics: null,
   forecastHorizon: 12, confidenceLevel: 95, biasCorrection: 'duan',
-  crossValResult: null, forecastResult: null, loadingStep: null, errorMessage: null,
+  crossValResult: null, backTransformResult: null, forecastResult: null, loadingStep: null, errorMessage: null,
 }
 
 // ── Store singleton ───────────────────────────────────────────────────────────
@@ -170,6 +180,7 @@ export const timeSightStore = {
   setDiagnostics: (d: DiagnosticsResult | null) => setState({ diagnostics: d }),
 
   setCrossValResult: (r: CrossValResult | null) => setState({ crossValResult: r }),
+  setBackTransformResult: (r: BackTransformResult | null) => setState({ backTransformResult: r }),
 
   setForecastHorizon: (h: number) => setState({ forecastHorizon: h, forecastResult: null }),
   setConfidenceLevel: (l: number) => setState({ confidenceLevel: l, forecastResult: null }),

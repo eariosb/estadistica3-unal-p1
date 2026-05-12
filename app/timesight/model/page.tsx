@@ -152,7 +152,7 @@ function RegressionLegend({ model, isLog, hasDuan }:
 
 // ── Subcomponente: panel de resultados ────────────────────────────────────────
 
-function ModelResults({ model }: { model: FittedModel }) {
+function ModelResults({ model, extTransform }: { model: FittedModel; extTransform: string }) {
   const router = useRouter()
 
   const coefNames = Object.keys(model.coefficients)
@@ -385,11 +385,20 @@ function ModelResults({ model }: { model: FittedModel }) {
         </div>
       </div>
 
-      {/* ── Botón continuar ── */}
-      <button onClick={() => router.push('/timesight/diagnostics')}
-        className="w-full py-3 bg-blue-700 text-white rounded-xl font-semibold hover:bg-blue-800 transition-colors shadow-sm flex items-center justify-center gap-2">
-        Continuar → Diagnósticos de residuos
-      </button>
+      {/* ── Botones continuar ── */}
+      <div className="flex gap-3">
+        {extTransform !== 'none' ? (
+          <button onClick={() => router.push('/timesight/backtransform')}
+            className="flex-1 py-3 bg-blue-700 text-white rounded-xl font-semibold hover:bg-blue-800 transition-colors shadow-sm">
+            Continuar → Escala original
+          </button>
+        ) : (
+          <button onClick={() => router.push('/timesight/diagnostics')}
+            className="flex-1 py-3 bg-blue-700 text-white rounded-xl font-semibold hover:bg-blue-800 transition-colors shadow-sm">
+            Continuar → Diagnósticos de residuos
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -702,7 +711,7 @@ export default function ModelPage() {
         </p>
       )}
 
-      {fittedModel && <ModelResults model={fittedModel} />}
+      {fittedModel && <ModelResults model={fittedModel} extTransform={extTransform} />}
     </div>
   )
 }

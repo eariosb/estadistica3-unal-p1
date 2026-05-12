@@ -45,6 +45,14 @@ const STEPS = [
   },
   {
     id: 5,
+    path: '/timesight/backtransform',
+    label: 'Escala original',
+    icon: '🔄',
+    description: 'Retorno a escala original',
+    tooltip: 'Solo activo cuando se aplicó una transformación. Muestra el modelo y los valores ajustados en la escala de los datos originales.',
+  },
+  {
+    id: 6,
     path: '/timesight/diagnostics',
     label: 'Diagnósticos',
     icon: '🩺',
@@ -52,7 +60,7 @@ const STEPS = [
     tooltip: 'Verifica los supuestos del modelo mediante gráficos y pruebas estadísticas.',
   },
   {
-    id: 6,
+    id: 7,
     path: '/timesight/crossval',
     label: 'Validación',
     icon: '🎯',
@@ -60,7 +68,7 @@ const STEPS = [
     tooltip: 'Evalúa la capacidad predictiva del modelo con walk-forward cross-validation: MAE, RMSE, MAPE por horizonte.',
   },
   {
-    id: 7,
+    id: 8,
     path: '/timesight/forecast',
     label: 'Pronóstico',
     icon: '📈',
@@ -68,7 +76,7 @@ const STEPS = [
     tooltip: 'Genera pronósticos con corrección de sesgo (estimador de Duan).',
   },
   {
-    id: 8,
+    id: 9,
     path: '/timesight/report',
     label: 'Informe',
     icon: '📄',
@@ -81,8 +89,11 @@ const STEPS = [
 
 function WizardSidebar() {
   const pathname = usePathname()
-  const { series, exploreResult, fittedModel, diagnostics, crossValResult, forecastResult } =
+  const { series, exploreResult, transformCode, fittedModel, diagnostics, crossValResult, forecastResult } =
     useTimeSightStore()
+
+  // Hay transformación activa cuando el usuario aplicó log/sqrt/diff en el paso 3
+  const hasTransform = !!(transformCode && transformCode.trim() !== '' && transformCode.trim() !== 'x')
 
   // Qué pasos están desbloqueados
   const unlocked = (stepId: number) => {
@@ -90,10 +101,11 @@ function WizardSidebar() {
     if (stepId === 2) return !!series
     if (stepId === 3) return !!series
     if (stepId === 4) return !!series
-    if (stepId === 5) return !!fittedModel
-    if (stepId === 6) return !!fittedModel   // Validación: requiere modelo
-    if (stepId === 7) return !!fittedModel   // Pronóstico: no requiere CV (opcional)
-    if (stepId === 8) return !!forecastResult
+    if (stepId === 5) return !!fittedModel && hasTransform  // Back-transform: solo si hay transformación
+    if (stepId === 6) return !!fittedModel
+    if (stepId === 7) return !!fittedModel
+    if (stepId === 8) return !!fittedModel
+    if (stepId === 9) return !!forecastResult
     return false
   }
 
@@ -103,10 +115,11 @@ function WizardSidebar() {
     if (stepId === 2) return !!exploreResult
     if (stepId === 3) return true            // siempre opcional
     if (stepId === 4) return !!fittedModel
-    if (stepId === 5) return !!diagnostics
-    if (stepId === 6) return !!crossValResult
-    if (stepId === 7) return !!forecastResult
-    if (stepId === 8) return false
+    if (stepId === 5) return false           // back-transform: se considera informativo (no bloquea)
+    if (stepId === 6) return !!diagnostics
+    if (stepId === 7) return !!crossValResult
+    if (stepId === 8) return !!forecastResult
+    if (stepId === 9) return false
     return false
   }
 
@@ -220,7 +233,7 @@ function WizardSidebar() {
   )
 }
 
-// ── Layout principal ──────────────────────────────────────────────────────────
+// ── Layout principal ───────────────────────────────────────────────────────────────────────
 
 export default function TimeSightLayout({
   children,

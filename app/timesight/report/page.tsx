@@ -1,7 +1,7 @@
 'use client'
 
 // ══════════════════════════════════════════════════════════════════════════════
-// app/timesight/report/page.tsx  —  Paso 7: Informe del análisis
+// app/timesight/report/page.tsx  —  Paso 9: Informe del análisis
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { useTimeSightStore, timeSightStore, FREQ_LABELS } from '@/lib/timesight-store'
@@ -41,7 +41,7 @@ export default function ReportPage() {
   return (
     <div>
       <div className="mb-5">
-        <h1 className="text-2xl font-bold text-stone-900">📄 Paso 7 — Informe del análisis</h1>
+        <h1 className="text-2xl font-bold text-stone-900">📄 Paso 9 — Informe del análisis</h1>
         <p className="text-stone-500 mt-1">
           Resumen completo del flujo de análisis de TimeSight.
         </p>

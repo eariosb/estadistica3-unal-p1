@@ -13,6 +13,7 @@ import type {
   BiasCorrection,
   TransformResult,
   CrossValResult,
+  BackTransformResult,
 } from './timesight-store'
 
 const API_BASE = '/api/timesight'
@@ -171,6 +172,31 @@ export async function apiCrossVal(
     horizon,
     initialFrac,
     maxFolds,
+  })
+}
+
+
+// ── POST /timesight/backtransform ─────────────────────────────────────────────
+
+export async function apiBackTransform(
+  series: TSeries,          // serie ORIGINAL (sin transformar)
+  activeSeries: TSeries,    // serie activa (transformada o igual a original)
+  model: FittedModel,
+  transformCode = ''
+): Promise<BackTransformResult> {
+  const extFromModel = (model.params as { externalTransform?: string }).externalTransform
+  const externalTransform = extFromModel ?? getExternalTransform(transformCode)
+
+  return postJson<BackTransformResult>('backtransform', {
+    seriesOrig:        series.values,
+    seriesActive:      activeSeries.values,
+    freq:              series.freq,
+    start:             series.start,
+    fitted:            model.fitted,
+    smearingFactor:    model.smearingFactor ?? 1,
+    externalTransform,
+    transformLog:      model.params.transformLog,
+    family:            model.family,
   })
 }
 

@@ -9,7 +9,9 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const R_BACKEND = process.env.R_BACKEND_URL ?? 'http://localhost:8000'
 const R_SECRET  = process.env.R_BACKEND_SECRET ?? ''
-const TIMEOUT   = 20_000   // ms
+// Timeout diferenciado: crossval re-ajusta el modelo N veces (puede tardar)
+const TIMEOUT_DEFAULT  = 25_000   // ms  — endpoints rápidos
+const TIMEOUT_SLOW     = 90_000   // ms  — crossval (hasta 20 re-ajustes)
 
 // Endpoints de TimeSight permitidos
 const ALLOWED_ENDPOINTS = new Set([
@@ -18,8 +20,12 @@ const ALLOWED_ENDPOINTS = new Set([
   'model-fit',
   'diagnose',
   'forecast',
+  'crossval',
+  'backtransform',
   'builtin',
 ])
+
+const SLOW_ENDPOINTS = new Set(['crossval'])
 
 export async function POST(req: NextRequest) {
   let body: { endpoint?: string; payload?: unknown }
@@ -43,8 +49,9 @@ export async function POST(req: NextRequest) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (R_SECRET) headers['X-Internal-Secret'] = R_SECRET
 
+  const timeout = SLOW_ENDPOINTS.has(endpoint) ? TIMEOUT_SLOW : TIMEOUT_DEFAULT
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), TIMEOUT)
+  const timer = setTimeout(() => controller.abort(), timeout)
 
   try {
     const rRes = await fetch(rUrl, {
@@ -61,7 +68,7 @@ export async function POST(req: NextRequest) {
     clearTimeout(timer)
     if (err instanceof Error && err.name === 'AbortError') {
       return NextResponse.json(
-        { error: 'El servidor R tardó demasiado. Simplifica los parámetros.' },
+        { error: 'El servidor R tardó demasiado. Simplifica los parámetros o reduce los folds.' },
         { status: 504 }
       )
     }

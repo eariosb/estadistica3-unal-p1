@@ -1301,3 +1301,124 @@ ts_crossval <- function(values, freq, start,
     plots          = Filter(Negate(is.null), list(plot1, plot2))
   )
 }
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ts_builtin()  —  Devuelve valores de un dataset builtin de R
+#
+# Los datasets disponibles son los incluidos en el mini-curso:
+#   AirPassengers, co2, JohnsonJohnson, Nile, nottem,
+#   sunspot.year, UKgas, lynx
+# ══════════════════════════════════════════════════════════════════════════════
+
+ts_builtin <- function(dataset) {
+  allowed <- c("AirPassengers", "co2", "JohnsonJohnson", "Nile",
+               "nottem", "sunspot.year", "UKgas", "lynx")
+
+  if (!dataset %in% allowed)
+    stop(paste0("Dataset '", dataset, "' no disponible. Opciones: ",
+                paste(allowed, collapse = ", ")))
+
+  # Cargar el dataset en un entorno local para evitar conflictos
+  env <- new.env()
+  data(list = dataset, package = "datasets", envir = env)
+  yt  <- get(dataset, envir = env)
+
+  list(values = as.list(as.numeric(yt)))
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ts_backtransform()  —  Gráfico y descripción del back-transform
+#
+# Genera un gráfico de la serie original vs valores ajustados en escala
+# original, y devuelve la descripción del proceso de transformación inversa.
+# ══════════════════════════════════════════════════════════════════════════════
+
+ts_backtransform <- function(values_orig, values_active, freq, start,
+                              fitted_vals, smearing_factor = 1,
+                              external_transform = "none",
+                              transform_log = FALSE,
+                              family = "polynomial") {
+
+  yt_orig   <- ts(as.numeric(values_orig),   frequency = as.integer(freq), start = start)
+  yt_active <- ts(as.numeric(values_active), frequency = as.integer(freq), start = start)
+  n <- length(yt_orig)
+  t_vec <- as.numeric(time(yt_orig))
+
+  ext <- external_transform
+
+  # ── Descripción de la transformación aplicada ──────────────────────────────
+  transform_desc <- switch(ext,
+    log     = "Transformación logarítmica: Y_activa = log(Y_original)",
+    sqrt    = "Transformación de raíz cuadrada: Y_activa = sqrt(Y_original)",
+    diff    = "Primera diferencia: Y_activa = ΔY_t = Y_t - Y_{t-1}",
+    logdiff = "Primera diferencia de log: Y_activa = Δlog(Y_t) ≈ tasa de cambio",
+    if (isTRUE(transform_log)) "Log interno del modelo: ajuste en log(Y)" else
+      "Sin transformación externa: modelo en escala original"
+  )
+
+  # ── Fórmula de back-transform ──────────────────────────────────────────────
+  backtransform_formula <- switch(ext,
+    log     = paste0("Ŷ_original = exp(Ŷ_log)",
+                     if (smearing_factor != 1 && family != "arima")
+                       paste0(" × ", round(smearing_factor, 4), " (corrección de Duan)")
+                     else ""),
+    sqrt    = "Ŷ_original = (Ŷ_sqrt)²",
+    diff    = "Ŷ_original(t) = Y_original(t-1) + Ŷ_diff(t)  [acumulación de diferencias]",
+    logdiff = "Ŷ_original(t) = Y_original(t-1) × exp(Ŷ_logdiff(t))  [encadenamiento]",
+    if (isTRUE(transform_log))
+      paste0("Ŷ_original = exp(Ŷ_log) × ", round(smearing_factor, 4), " (Duan)")
+    else
+      "Ŷ_original = Ŷ  (sin back-transform)"
+  )
+
+  # ── Back-transform de los valores ajustados ────────────────────────────────
+  # Para regresión y ETS: fitted_vals ya vienen en escala original desde el backend.
+  # Para ARIMA con transformación externa: fitted_vals están en escala transformada.
+  # Aquí siempre mostramos los valores tal como vienen (ya back-transformados).
+  fitted_orig <- as.numeric(fitted_vals)
+
+  # Recortar longitud por seguridad
+  n_fit <- min(length(fitted_orig), n)
+  fitted_orig <- fitted_orig[seq_len(n_fit)]
+  y_orig_trim <- as.numeric(yt_orig)[seq_len(n_fit)]
+  t_trim      <- t_vec[seq_len(n_fit)]
+
+  # Correlación entre original y ajustado (para medir bondad de ajuste visual)
+  r2_bt <- tryCatch({
+    ss_res <- sum((y_orig_trim - fitted_orig)^2, na.rm = TRUE)
+    ss_tot <- sum((y_orig_trim - mean(y_orig_trim, na.rm = TRUE))^2, na.rm = TRUE)
+    round(1 - ss_res / ss_tot, 4)
+  }, error = function(e) NA_real_)
+
+  # ── Gráfico de comparación ─────────────────────────────────────────────────
+  plot_b64 <- ts_png_b64(function() {
+    par(mar = c(4, 4, 3, 1), family = "sans")
+
+    y_range <- range(c(y_orig_trim, fitted_orig), na.rm = TRUE)
+    y_range <- y_range + c(-1, 1) * diff(y_range) * 0.06
+
+    plot(t_trim, y_orig_trim, type = "l",
+         ylim = y_range, col = "#374151", lwd = 1.8, bty = "l",
+         main = "Serie original vs valores ajustados (escala original)",
+         xlab = "Tiempo", ylab = "Valor")
+    grid(col = "#e7e5e4", lty = 1)
+    lines(t_trim, fitted_orig, col = "#3b82f6", lwd = 2.2, lty = 1)
+    legend("topleft",
+           legend = c("Serie original", "Valores ajustados (back-transformados)"),
+           col    = c("#374151", "#3b82f6"),
+           lwd    = c(1.8, 2.2), bty = "n", cex = 0.85)
+
+    if (!is.na(r2_bt))
+      mtext(paste0("R² = ", r2_bt), side = 3, adj = 1, cex = 0.75,
+            col = "#6b7280", line = 0.2)
+  })
+
+  list(
+    transformDesc      = transform_desc,
+    backtransformFormula = backtransform_formula,
+    smearingFactor     = smearing_factor,
+    r2                 = r2_bt,
+    externalTransform  = ext,
+    plots              = list(plot_b64)
+  )
+}
