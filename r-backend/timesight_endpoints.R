@@ -451,7 +451,36 @@ ts_model_fit <- function(values, freq, start, family, degree, seasonal,
     }
   }
 
-  colnames(X) <- make.names(paste0("X", seq_len(ncol(X))), unique = TRUE)
+  # ── Nombres semánticos para las columnas de X ──────────────────────────────
+  # Construimos nombres descriptivos: beta0, t1, t2, I_Feb, I_Mar, ..., sen1, cos1, ...
+  col_names <- "beta0"
+
+  if (family %in% c("polynomial", "log")) {
+    for (p in seq_len(as.integer(degree)))
+      col_names <- c(col_names, if (p == 1) "t1" else paste0("t", p))
+  } else if (family == "exponential") {
+    col_names <- c(col_names, "t1")
+  }
+
+  if (seasonal != "none" && freq > 1) {
+    if (seasonal == "dummy") {
+      # Etiquetas de período según frecuencia
+      period_labels <- switch(as.character(freq),
+        "12" = c("Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"),
+        "4"  = paste0("T", 1:4),
+        "2"  = paste0("S", 1:2),
+        paste0("P", 1:freq)
+      )
+      # El período 1 es la referencia (Ene, T1, S1, P1); dummies desde período 2
+      col_names <- c(col_names, paste0("I_", period_labels[2:freq]))
+    } else if (seasonal == "fourier") {
+      K <- min(as.integer(harmonics), floor(freq / 2))
+      for (k in seq_len(K))
+        col_names <- c(col_names, paste0("sen", k), paste0("cos", k))
+    }
+  }
+
+  colnames(X) <- make.names(col_names, unique = TRUE)
 
   # ── Ajuste ARIMA automático ───────────────────────────────────────────────
   if (family == "arima") {
@@ -746,30 +775,89 @@ ts_forecast <- function(values, freq, start, family, degree, seasonal,
 
   # ── ARIMA ─────────────────────────────────────────────────────────────────
   if (family == "arima") {
-    m   <- forecast::auto.arima(y, seasonal = (freq > 1), stepwise = TRUE, approximation = TRUE)
-    fc  <- forecast::forecast(m, h = h, level = c(80, confidence_level))
-    f_vals <- as.numeric(fc$mean)
+    ext_arima <- external_transform
+    needs_log <- (ext_arima == "log") || isTRUE(transform_log)
+
+    m  <- forecast::auto.arima(y, seasonal = (freq > 1), stepwise = TRUE, approximation = TRUE)
+    fc <- forecast::forecast(m, h = h, level = c(80, confidence_level))
+
+    f_log  <- as.numeric(fc$mean)
     lo95   <- as.numeric(fc$lower[, 2])
     hi95   <- as.numeric(fc$upper[, 2])
     lo80   <- as.numeric(fc$lower[, 1])
     hi80   <- as.numeric(fc$upper[, 1])
 
+    # ── Back-transform si la serie estaba en log-escala ──────────────────
+    if (needs_log) {
+      resids_arima <- as.numeric(residuals(m))
+      smearing_a   <- mean(exp(resids_arima))
+      bt_factor    <- switch(bias_correction,
+        duan      = smearing_a,
+        lognormal = exp(var(resids_arima) / 2),
+        none      = 1
+      )
+      f_vals <- exp(f_log) * bt_factor
+      lo95   <- exp(lo95)
+      hi95   <- exp(hi95)
+      lo80   <- exp(lo80)
+      hi80   <- exp(hi80)
+      arima_scale_note <- paste0(
+        "✅ Pronósticos ARIMA en ESCALA ORIGINAL (back-transform exp() aplicado). ",
+        switch(bias_correction,
+          duan      = paste0("Factor de Duan = ", round(smearing_a, 4), "."),
+          lognormal = paste0("Corrección log-normal: exp(s²/2) = ", round(exp(var(resids_arima)/2), 4), "."),
+          none      = "Sin corrección de sesgo."
+        )
+      )
+      y_plot_arima <- exp(as.numeric(y))
+    } else {
+      f_vals <- f_log
+      smearing_a <- 1
+      arima_scale_note <- NULL
+      y_plot_arima <- as.numeric(y)
+    }
+
+    # ── Fan chart en escala correcta ─────────────────────────────────────
+    t_hist_a   <- as.numeric(time(y))
+    t_fut_a    <- t_hist_a[n] + seq_len(h) / freq
+
     plot_b64 <- ts_png_b64(function() {
       par(mar = c(4, 4, 3, 1), family = "sans")
-      plot(fc, main = paste0("Pronóstico ARIMA — Horizonte ", h),
-           fcol = "#ef4444", shadecols = c("#dbeafe", "#bfdbfe"),
-           flwd = 2, bty = "l")
-      grid(col = "#e7e5e4", lty = 1)
+      if (needs_log) {
+        # Dibujamos manualmente para mostrar escala original
+        y_all <- c(y_plot_arima, f_vals, lo95, hi95)
+        y_range <- range(y_all, na.rm = TRUE) * c(0.97, 1.03)
+        plot(t_hist_a, y_plot_arima, type = "l",
+             xlim = range(c(t_hist_a, t_fut_a)), ylim = y_range,
+             col = "#374151", lwd = 1.5, bty = "l",
+             main = paste0("Pronóstico ARIMA — Horizonte ", h, " (escala original)"),
+             xlab = "Tiempo", ylab = "")
+        grid(col = "#e7e5e4", lty = 1)
+        polygon(c(t_fut_a, rev(t_fut_a)), c(hi95, rev(lo95)),
+                col = "#bfdbfe80", border = NA)
+        polygon(c(t_fut_a, rev(t_fut_a)), c(hi80, rev(lo80)),
+                col = "#93c5fd80", border = NA)
+        lines(t_fut_a, f_vals, col = "#ef4444", lwd = 2.5)
+        points(t_fut_a, f_vals, col = "#ef4444", pch = 19, cex = 0.5)
+      } else {
+        plot(fc, main = paste0("Pronóstico ARIMA — Horizonte ", h),
+             fcol = "#ef4444", shadecols = c("#dbeafe", "#bfdbfe"),
+             flwd = 2, bty = "l")
+        grid(col = "#e7e5e4", lty = 1)
+      }
     })
 
     return(list(
-      forecast = as.list(unname(f_vals)),
-      lower80  = as.list(unname(lo80)),  upper80 = as.list(unname(hi80)),
-      lower95  = as.list(unname(lo95)),  upper95 = as.list(unname(hi95)),
-      horizon  = h,
-      method   = "none",
-      smearingFactor = 1,
-      plots    = Filter(Negate(is.null), list(plot_b64))
+      forecast       = as.list(unname(f_vals)),
+      lower80        = as.list(unname(lo80)),
+      upper80        = as.list(unname(hi80)),
+      lower95        = as.list(unname(lo95)),
+      upper95        = as.list(unname(hi95)),
+      horizon        = h,
+      method         = if (needs_log) bias_correction else "none",
+      smearingFactor = smearing_a,
+      plots          = Filter(Negate(is.null), list(plot_b64)),
+      scaleNote      = arima_scale_note
     ))
   }
 
@@ -794,7 +882,23 @@ ts_forecast <- function(values, freq, start, family, degree, seasonal,
         }
       }
     }
-    colnames(X) <- make.names(paste0("X", seq_len(ncol(X))), unique = TRUE)
+    # Nombres semánticos (idéntica lógica que en ts_model_fit)
+    col_names <- "beta0"
+    for (p in seq_len(as.integer(degree)))
+      col_names <- c(col_names, if (p == 1) "t1" else paste0("t", p))
+    if (seasonal != "none" && freq > 1) {
+      if (seasonal == "dummy") {
+        period_labels <- switch(as.character(freq),
+          "12" = c("Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"),
+          "4"  = paste0("T", 1:4), "2" = paste0("S", 1:2), paste0("P", 1:freq))
+        col_names <- c(col_names, paste0("I_", period_labels[2:freq]))
+      } else if (seasonal == "fourier") {
+        K <- min(as.integer(harmonics), floor(freq / 2))
+        for (k in seq_len(K))
+          col_names <- c(col_names, paste0("sen", k), paste0("cos", k))
+      }
+    }
+    colnames(X) <- make.names(col_names, unique = TRUE)
     as.data.frame(X)
   }
 
@@ -806,3 +910,394 @@ ts_forecast <- function(values, freq, start, family, degree, seasonal,
   ext <- external_transform
 
   # ── Factor de smearing y back-transform ────────────────────────
+  needs_log_bt  <- (ext == "log") || isTRUE(transform_log)
+  needs_sqrt_bt <- (ext == "sqrt")
+
+  smearing <- if (needs_log_bt) mean(exp(resids_log)) else 1
+
+  # ── Construir X para el horizonte futuro ─────────────────────────────────
+  last_period <- as.integer(cycle(y)[n])
+  fut_cyc     <- ((last_period - 1L + seq_len(h)) %% freq) + 1L
+  df_fut      <- build_X(t_fut, fut_cyc)
+
+  f_log <- as.numeric(predict(m, newdata = df_fut))
+
+  pred_full <- predict(m, newdata = df_fut, interval = "prediction",
+                       level = confidence_level / 100)
+  lo_log <- pred_full[, "lwr"]
+  hi_log <- pred_full[, "upr"]
+
+  pred80 <- predict(m, newdata = df_fut, interval = "prediction", level = 0.80)
+  lo80_log <- pred80[, "lwr"]
+  hi80_log <- pred80[, "upr"]
+
+  # ── Back-transform según escala activa ────────────────────────────────────
+  if (needs_log_bt) {
+    bt_factor <- switch(bias_correction,
+      duan      = smearing,
+      lognormal = exp(var(resids_log) / 2),
+      none      = 1
+    )
+    f_orig    <- exp(f_log)    * bt_factor
+    lo_orig   <- exp(lo_log)
+    hi_orig   <- exp(hi_log)
+    lo80_orig <- exp(lo80_log)
+    hi80_orig <- exp(hi80_log)
+    scale_label <- "escala original"
+    forecast_scale_note <- paste0(
+      "✅ Pronósticos en ESCALA ORIGINAL (back-transform exp() aplicado). ",
+      switch(bias_correction,
+        duan      = paste0("Corrección de sesgo de Duan: factor = ", round(smearing, 4), "."),
+        lognormal = paste0("Corrección log-normal: exp(s²/2) = ", round(exp(var(resids_log)/2), 4), "."),
+        none      = "Sin corrección de sesgo (exp(Ẑ) puede subestimar la media verdadera)."
+      )
+    )
+  } else if (needs_sqrt_bt) {
+    f_orig    <- f_log^2
+    lo_orig   <- pmax(0, lo_log^2)
+    hi_orig   <- hi_log^2
+    lo80_orig <- pmax(0, lo80_log^2)
+    hi80_orig <- hi80_log^2
+    scale_label <- "escala original (√ revertida)"
+    forecast_scale_note <- "✅ Pronósticos en ESCALA ORIGINAL (back-transform cuadrático: Ŷ = Ŷ_sqrt²)."
+  } else {
+    f_orig    <- f_log
+    lo_orig   <- lo_log
+    hi_orig   <- hi_log
+    lo80_orig <- lo80_log
+    hi80_orig <- hi80_log
+    scale_label <- "escala de la serie activa"
+    forecast_scale_note <- if (ext %in% c("diff", "logdiff"))
+      paste0("⚠️ Pronósticos en escala ",
+             if (ext == "diff") "diferenciada" else "log-diferenciada",
+             ". Para recuperar niveles, acumule las diferencias desde el último valor observado.")
+    else
+      "Pronósticos en la escala de la serie activa (sin transformación activa)."
+  }
+
+  # ── y_plot: historia en la misma escala que los pronósticos ─────────────
+  y_plot <- if (needs_log_bt)    exp(as.numeric(y))
+            else if (needs_sqrt_bt) as.numeric(y)^2
+            else                    as.numeric(y)
+
+  # ── Fan chart ─────────────────────────────────────────────────────────────
+  t_hist    <- as.numeric(time(y))
+  t_fut_dec <- t_hist[n] + seq_len(h) / freq
+
+  plot_b64 <- ts_png_b64(function() {
+    par(mar = c(4, 4, 3, 1), family = "sans")
+    y_range <- range(c(y_plot, f_orig, lo_orig, hi_orig), na.rm = TRUE)
+    plot(t_hist, y_plot, type = "l",
+         xlim = range(c(t_hist, t_fut_dec)),
+         ylim = y_range * c(0.97, 1.03),
+         col = "#374151", lwd = 1.5, bty = "l",
+         main = paste0("Pronóstico — Horizonte ", h, " (", scale_label, ")"),
+         xlab = "Tiempo", ylab = "")
+    grid(col = "#e7e5e4", lty = 1)
+    polygon(c(t_fut_dec, rev(t_fut_dec)), c(hi_orig, rev(lo_orig)),
+            col = "#bfdbfe80", border = NA)
+    polygon(c(t_fut_dec, rev(t_fut_dec)), c(hi80_orig, rev(lo80_orig)),
+            col = "#93c5fd80", border = NA)
+    lines(t_fut_dec, f_orig, col = "#ef4444", lwd = 2.5)
+    points(t_fut_dec, f_orig, col = "#ef4444", pch = 19, cex = 0.5)
+  })
+
+  list(
+    forecast       = as.list(unname(f_orig)),
+    lower80        = as.list(unname(lo80_orig)),
+    upper80        = as.list(unname(hi80_orig)),
+    lower95        = as.list(unname(lo_orig)),
+    upper95        = as.list(unname(hi_orig)),
+    horizon        = h,
+    method         = bias_correction,
+    smearingFactor = if (needs_log_bt) smearing else 1,
+    plots          = Filter(Negate(is.null), list(plot_b64)),
+    scaleNote      = forecast_scale_note
+  )
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ts_crossval()  —  Validación cruzada rolling-window (walk-forward)
+#
+# Para cada ventana de entrenamiento (tamaño creciente) ajusta el mismo tipo
+# de modelo y pronostica 'horizon' pasos adelante.  Compara los pronósticos
+# con los valores reales y agrega MAE, RMSE, MAPE por horizonte y global.
+#
+# Parámetros:
+#   values / freq / start    — serie de tiempo cruda
+#   family / degree / seasonal / harmonics / transform_log  — mismo que model-fit
+#   external_transform       — transformación del paso 3 ("none","log","sqrt",...)
+#   horizon                  — pasos a pronosticar (default = freq)
+#   initial_frac             — fracción inicial de datos para la 1ª ventana (0.7)
+#   max_folds                — número máximo de folds (20)
+# ══════════════════════════════════════════════════════════════════════════════
+
+ts_crossval <- function(values, freq, start,
+                        family        = "polynomial",
+                        degree        = 2,
+                        seasonal      = "none",
+                        harmonics     = 2,
+                        transform_log = FALSE,
+                        external_transform = "none",
+                        horizon       = NULL,
+                        initial_frac  = 0.7,
+                        max_folds     = 20) {
+
+  library(forecast)
+
+  # ── 1. Construir la serie y aplicar transformación externa ─────────────────
+  yt_raw <- ts(as.numeric(values), frequency = as.integer(freq), start = start)
+  n_raw  <- length(yt_raw)
+  fq     <- as.integer(frequency(yt_raw))
+
+  yt <- switch(external_transform,
+    log     = log(yt_raw),
+    sqrt    = sqrt(yt_raw),
+    diff    = { diff(yt_raw) },
+    logdiff = { diff(log(yt_raw)) },
+    yt_raw
+  )
+
+  n <- length(yt)
+  if (is.null(horizon)) horizon <- min(fq, max(2, floor(n * 0.10)))
+  horizon <- as.integer(horizon)
+
+  # ── 2. Ventana inicial ─────────────────────────────────────────────────────
+  min_init <- max(fq * 2 + as.integer(degree), 10L)
+  initial_window <- max(floor(n * initial_frac), min_init)
+  if (initial_window + horizon > n)
+    stop("Serie demasiado corta para validar con estos parámetros (prueba con horizonte menor o initial_frac menor).")
+
+  n_folds <- min(n - initial_window - horizon + 1, as.integer(max_folds))
+  if (n_folds < 3)
+    stop("Muy pocos folds disponibles (< 3). Reduce el horizonte o la fracción inicial.")
+
+  # ── 3. Helper: matriz de diseño para posiciones t_vec ─────────────────────
+  make_X_cv <- function(t_vec, fq, family, degree, seasonal, harmonics) {
+    X <- matrix(1, nrow = length(t_vec), ncol = 1)
+
+    if (family %in% c("polynomial", "log")) {
+      for (p in seq_len(as.integer(degree))) X <- cbind(X, t_vec^p)
+    } else if (family == "exponential") {
+      X <- cbind(X, t_vec)
+    }
+
+    if (seasonal != "none" && fq > 1) {
+      period_mod <- ((t_vec - 1) %% fq) + 1
+      if (seasonal == "dummy") {
+        for (s in 2:fq) X <- cbind(X, as.integer(period_mod == s))
+      } else if (seasonal == "fourier") {
+        K <- min(as.integer(harmonics), floor(fq / 2))
+        for (k in seq_len(K)) {
+          X <- cbind(X, sin(2 * pi * k * t_vec / fq))
+          X <- cbind(X, cos(2 * pi * k * t_vec / fq))
+        }
+      }
+    }
+    as.data.frame(X)
+  }
+
+  # ── 4. Bucle de validación cruzada ─────────────────────────────────────────
+  errors_mat  <- matrix(NA_real_, nrow = n_folds, ncol = horizon)
+  actuals_mat <- matrix(NA_real_, nrow = n_folds, ncol = horizon)
+
+  for (fold in seq_len(n_folds)) {
+    train_end <- initial_window + fold - 1
+    train_ts  <- window(yt, end = time(yt)[train_end])
+    n_train   <- length(train_ts)
+
+    # Índices de valores reales (escala original)
+    actual_start <- train_end + 1
+    actual_end   <- min(actual_start + horizon - 1, n_raw)
+    actual_orig  <- as.numeric(yt_raw)[actual_start:actual_end]
+    h_real       <- length(actual_orig)
+
+    tryCatch({
+      if (family == "arima") {
+        m_cv  <- forecast::auto.arima(train_ts, seasonal = (fq > 1),
+                                      stepwise = TRUE, approximation = TRUE)
+        fc_cv <- forecast::forecast(m_cv, h = horizon)
+        fc_vals_raw <- as.numeric(fc_cv$mean)
+
+        # Back-transform: la serie de entrenamiento puede ser log/sqrt
+        fc_vals <- switch(external_transform,
+          log     = exp(fc_vals_raw),
+          sqrt    = fc_vals_raw^2,
+          fc_vals_raw
+        )
+        # Además: log interno para ARIMA
+        if (isTRUE(transform_log) && external_transform == "none")
+          fc_vals <- exp(fc_vals)
+
+      } else if (family == "ets") {
+        m_cv  <- forecast::ets(train_ts)
+        fc_cv <- forecast::forecast(m_cv, h = horizon)
+        fc_vals_raw <- as.numeric(fc_cv$mean)
+        fc_vals <- switch(external_transform,
+          log  = exp(fc_vals_raw),
+          sqrt = fc_vals_raw^2,
+          fc_vals_raw
+        )
+
+      } else {
+        # ── Regresión ──────────────────────────────────────────────────────
+        t_train <- seq_len(n_train)
+        t_fut   <- n_train + seq_len(horizon)
+
+        # Log interno: ajustar sobre log(y)
+        y_train <- if (isTRUE(transform_log) || family == "exponential")
+                     log(as.numeric(train_ts))
+                   else
+                     as.numeric(train_ts)
+
+        X_train <- make_X_cv(t_train, fq, family, degree, seasonal, harmonics)
+        X_fut   <- make_X_cv(t_fut,   fq, family, degree, seasonal, harmonics)
+
+        df_train <- cbind(y = y_train, X_train)
+        m_cv     <- lm(y ~ ., data = df_train)
+
+        fc_log   <- as.numeric(predict(m_cv, newdata = X_fut))
+
+        if (isTRUE(transform_log) || family == "exponential") {
+          resids_cv       <- as.numeric(residuals(m_cv))
+          smearing_cv     <- mean(exp(resids_cv))
+          fc_vals_raw     <- exp(fc_log) * smearing_cv
+        } else {
+          fc_vals_raw <- fc_log
+        }
+
+        # Back-transform externo
+        fc_vals <- switch(external_transform,
+          log     = exp(fc_vals_raw),
+          sqrt    = fc_vals_raw^2,
+          diff    = fc_vals_raw,   # sin back-transform (necesita historial)
+          logdiff = fc_vals_raw,
+          fc_vals_raw
+        )
+      }
+
+      valid_h <- min(horizon, h_real, length(fc_vals))
+      errors_mat[fold,  seq_len(valid_h)] <- fc_vals[seq_len(valid_h)] - actual_orig[seq_len(valid_h)]
+      actuals_mat[fold, seq_len(valid_h)] <- actual_orig[seq_len(valid_h)]
+
+    }, error = function(e) NULL)   # fold fallido → NA (ignorado en métricas)
+  }
+
+  # ── 5. Métricas por horizonte ──────────────────────────────────────────────
+  horizon_metrics <- lapply(seq_len(horizon), function(h) {
+    errs <- errors_mat[, h]
+    acts <- actuals_mat[, h]
+    ok   <- !is.na(errs) & !is.na(acts) & acts != 0
+    if (sum(ok) == 0) return(list(h = h, mae = NA, rmse = NA, mape = NA))
+    list(
+      h    = h,
+      mae  = round(mean(abs(errs[ok])), 4),
+      rmse = round(sqrt(mean(errs[ok]^2)), 4),
+      mape = round(mean(abs(errs[ok] / acts[ok])) * 100, 4)
+    )
+  })
+
+  # Métricas globales
+  all_e <- as.vector(errors_mat)
+  all_a <- as.vector(actuals_mat)
+  ok_g  <- !is.na(all_e) & !is.na(all_a) & all_a != 0
+  overall <- list(
+    mae          = round(mean(abs(all_e[ok_g])), 4),
+    rmse         = round(sqrt(mean(all_e[ok_g]^2)), 4),
+    mape         = round(mean(abs(all_e[ok_g] / all_a[ok_g])) * 100, 4),
+    nFolds       = n_folds,
+    initialWindow = initial_window,
+    horizon      = horizon
+  )
+
+  # ── 6. Gráficos ────────────────────────────────────────────────────────────
+  rmse_h <- sapply(horizon_metrics, function(x) if (!is.na(x$rmse)) x$rmse else 0)
+  mape_h <- sapply(horizon_metrics, function(x) if (!is.na(x$mape)) x$mape else 0)
+  h_labels <- paste0("h=", seq_len(horizon))
+
+  plot1 <- ts_png_b64(function() {
+    par(mfrow = c(1, 2), mar = c(4, 4, 3, 1), family = "sans")
+
+    bp1 <- barplot(rmse_h, names.arg = h_labels,
+                   main = "RMSE por horizonte de pronóstico",
+                   col  = "#3b82f6", border = NA,
+                   xlab = "Horizonte (pasos)", ylab = "RMSE",
+                   las  = if (horizon > 6) 2 else 1,
+                   cex.names = if (horizon > 8) 0.7 else 0.9)
+    grid(nx = NA, ny = NULL, col = "#e7e5e4", lty = 1)
+
+    bp2 <- barplot(mape_h, names.arg = h_labels,
+                   main = "MAPE (%) por horizonte de pronóstico",
+                   col  = "#10b981", border = NA,
+                   xlab = "Horizonte (pasos)", ylab = "MAPE (%)",
+                   las  = if (horizon > 6) 2 else 1,
+                   cex.names = if (horizon > 8) 0.7 else 0.9)
+    grid(nx = NA, ny = NULL, col = "#e7e5e4", lty = 1)
+  })
+
+  # Gráfico 2: serie histórica con pronósticos del último fold (visual check)
+  last_fold <- n_folds
+  train_end_last <- initial_window + last_fold - 1
+  t_hist_vals    <- as.numeric(yt_raw)[seq_len(train_end_last)]
+  actual_fut_vals <- as.numeric(yt_raw)[seq(train_end_last + 1,
+                                             min(train_end_last + horizon, n_raw))]
+  t_indices <- seq_along(t_hist_vals)
+  t_fut_idx <- train_end_last + seq_along(actual_fut_vals)
+
+  # Reajustar con último fold para obtener pronósticos del check
+  train_ts_last <- window(yt, end = time(yt)[train_end_last])
+  fc_last <- tryCatch({
+    if (family == "arima") {
+      m_last <- forecast::auto.arima(train_ts_last, seasonal = (fq > 1),
+                                     stepwise = TRUE, approximation = TRUE)
+      fc_raw <- as.numeric(forecast::forecast(m_last, h = horizon)$mean)
+    } else if (family == "ets") {
+      m_last <- forecast::ets(train_ts_last)
+      fc_raw <- as.numeric(forecast::forecast(m_last, h = horizon)$mean)
+    } else {
+      n_last <- length(train_ts_last)
+      y_l    <- if (isTRUE(transform_log) || family == "exponential")
+                  log(as.numeric(train_ts_last)) else as.numeric(train_ts_last)
+      Xl <- make_X_cv(seq_len(n_last), fq, family, degree, seasonal, harmonics)
+      Xf <- make_X_cv(n_last + seq_len(horizon), fq, family, degree, seasonal, harmonics)
+      ml <- lm(y ~ ., data = cbind(y = y_l, Xl))
+      pl <- as.numeric(predict(ml, newdata = Xf))
+      fc_raw <- if (isTRUE(transform_log) || family == "exponential")
+                  exp(pl) * mean(exp(residuals(ml))) else pl
+    }
+    switch(external_transform,
+      log  = exp(fc_raw), sqrt = fc_raw^2, fc_raw)
+  }, error = function(e) rep(NA, horizon))
+
+  plot2 <- ts_png_b64(function() {
+    par(mar = c(4, 4, 3, 1), family = "sans")
+    y_range <- range(c(t_hist_vals, actual_fut_vals, fc_last), na.rm = TRUE)
+    y_range <- y_range + c(-1, 1) * diff(y_range) * 0.05
+
+    plot(t_indices, t_hist_vals, type = "l",
+         xlim = c(1, train_end_last + horizon),
+         ylim = y_range, col = "#374151", lwd = 1.5, bty = "l",
+         main = paste0("Verificación: último fold de CV (fold ", last_fold, ")"),
+         xlab = "Índice temporal", ylab = "")
+    grid(col = "#e7e5e4", lty = 1)
+    lines(t_fut_idx, actual_fut_vals, col = "#374151", lwd = 1.5, lty = 2)
+    lines(t_fut_idx[seq_along(fc_last)], fc_last,
+          col = "#ef4444", lwd = 2, lty = 1)
+    points(t_fut_idx[seq_along(fc_last)], fc_last,
+           col = "#ef4444", pch = 19, cex = 0.7)
+    legend("topleft",
+           legend = c("Historia", "Real (test)", "Pronóstico CV"),
+           col    = c("#374151", "#374151", "#ef4444"),
+           lty    = c(1, 2, 1), lwd = c(1.5, 1.5, 2),
+           pch    = c(NA, NA, 19), cex = 0.8, bty = "n")
+  })
+
+  list(
+    horizonMetrics = horizon_metrics,
+    overall        = overall,
+    nFolds         = n_folds,
+    initialWindow  = initial_window,
+    horizon        = horizon,
+    plots          = Filter(Negate(is.null), list(plot1, plot2))
+  )
+}

@@ -70,6 +70,19 @@ export interface DiagnosticsResult {
 
 export type BiasCorrection = 'duan' | 'lognormal' | 'none'
 
+export interface HorizonMetric {
+  h: number; mae: number; rmse: number; mape: number
+}
+
+export interface CrossValResult {
+  horizonMetrics: HorizonMetric[]
+  overall: { mae: number; rmse: number; mape: number; nFolds: number; initialWindow: number; horizon: number }
+  plots: string[]
+  nFolds: number
+  initialWindow: number
+  horizon: number
+}
+
 export interface ForecastResult {
   forecast: number[]; lower80: number[]; upper80: number[]
   lower95: number[]; upper95: number[]
@@ -95,6 +108,7 @@ export interface AnalysisState {
   forecastHorizon: number
   confidenceLevel: number
   biasCorrection: BiasCorrection
+  crossValResult: CrossValResult | null
   forecastResult: ForecastResult | null
   loadingStep: string | null
   errorMessage: string | null
@@ -109,7 +123,7 @@ const INITIAL: AnalysisState = {
   transformedSeries: null, transformCode: '', transformResult: null,
   modelParams: DEFAULT_MODEL_PARAMS, fittedModel: null, diagnostics: null,
   forecastHorizon: 12, confidenceLevel: 95, biasCorrection: 'duan',
-  forecastResult: null, loadingStep: null, errorMessage: null,
+  crossValResult: null, forecastResult: null, loadingStep: null, errorMessage: null,
 }
 
 // ── Store singleton ───────────────────────────────────────────────────────────
@@ -155,6 +169,8 @@ export const timeSightStore = {
 
   setDiagnostics: (d: DiagnosticsResult | null) => setState({ diagnostics: d }),
 
+  setCrossValResult: (r: CrossValResult | null) => setState({ crossValResult: r }),
+
   setForecastHorizon: (h: number) => setState({ forecastHorizon: h, forecastResult: null }),
   setConfidenceLevel: (l: number) => setState({ confidenceLevel: l, forecastResult: null }),
   setBiasCorrection: (m: BiasCorrection) => setState({ biasCorrection: m, forecastResult: null }),
@@ -167,8 +183,6 @@ export const timeSightStore = {
 
   getActiveSeries: () => _state.transformedSeries ?? _state.series,
 }
-
-// ── Hook React ────────────────────────────────────────────────────────────────
 
 export function useTimeSightStore(): AnalysisState & typeof timeSightStore {
   const [, forceRender] = useState(0)

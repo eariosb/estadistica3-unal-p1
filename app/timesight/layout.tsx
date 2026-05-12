@@ -53,6 +53,14 @@ const STEPS = [
   },
   {
     id: 6,
+    path: '/timesight/crossval',
+    label: 'Validación',
+    icon: '🎯',
+    description: 'Validación cruzada rolling-window',
+    tooltip: 'Evalúa la capacidad predictiva del modelo con walk-forward cross-validation: MAE, RMSE, MAPE por horizonte.',
+  },
+  {
+    id: 7,
     path: '/timesight/forecast',
     label: 'Pronóstico',
     icon: '📈',
@@ -60,7 +68,7 @@ const STEPS = [
     tooltip: 'Genera pronósticos con corrección de sesgo (estimador de Duan).',
   },
   {
-    id: 7,
+    id: 8,
     path: '/timesight/report',
     label: 'Informe',
     icon: '📄',
@@ -73,7 +81,7 @@ const STEPS = [
 
 function WizardSidebar() {
   const pathname = usePathname()
-  const { series, exploreResult, fittedModel, diagnostics, forecastResult } =
+  const { series, exploreResult, fittedModel, diagnostics, crossValResult, forecastResult } =
     useTimeSightStore()
 
   // Qué pasos están desbloqueados
@@ -83,8 +91,9 @@ function WizardSidebar() {
     if (stepId === 3) return !!series
     if (stepId === 4) return !!series
     if (stepId === 5) return !!fittedModel
-    if (stepId === 6) return !!fittedModel
-    if (stepId === 7) return !!forecastResult
+    if (stepId === 6) return !!fittedModel   // Validación: requiere modelo
+    if (stepId === 7) return !!fittedModel   // Pronóstico: no requiere CV (opcional)
+    if (stepId === 8) return !!forecastResult
     return false
   }
 
@@ -92,11 +101,12 @@ function WizardSidebar() {
   const completed = (stepId: number) => {
     if (stepId === 1) return !!series
     if (stepId === 2) return !!exploreResult
-    if (stepId === 3) return true   // siempre opcional
+    if (stepId === 3) return true            // siempre opcional
     if (stepId === 4) return !!fittedModel
     if (stepId === 5) return !!diagnostics
-    if (stepId === 6) return !!forecastResult
-    if (stepId === 7) return false
+    if (stepId === 6) return !!crossValResult
+    if (stepId === 7) return !!forecastResult
+    if (stepId === 8) return false
     return false
   }
 

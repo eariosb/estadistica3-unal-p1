@@ -249,10 +249,10 @@ export default function DiagnosticsPage() {
           )}
 
           {/* Navegación */}
-          <div className="pt-4 border-t border-stone-200">
+          <div className="pt-4 border-t border-stone-200 flex gap-3">
             <button onClick={() => router.push('/timesight/forecast')}
-              className="px-6 py-2.5 bg-blue-700 text-white rounded-lg font-semibold hover:bg-blue-800 transition-colors shadow-sm">
-              📈 Ir a Pronóstico →
+              className="px-4 py-2 text-stone-600 border border-stone-300 rounded-lg text-sm hover:bg-stone-50">
+              Saltar a Pronóstico →
             </button>
           </div>
         </div>

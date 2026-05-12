@@ -12,6 +12,7 @@ import type {
   ForecastResult,
   BiasCorrection,
   TransformResult,
+  CrossValResult,
 } from './timesight-store'
 
 const API_BASE = '/api/timesight'
@@ -141,6 +142,35 @@ export async function apiForecast(
     confidenceLevel,
     biasCorrection,
     externalTransform,
+  })
+}
+
+// ── POST /timesight/crossval ──────────────────────────────────────────────────
+
+export async function apiCrossVal(
+  series: TSeries,
+  model: FittedModel,
+  horizon: number,
+  transformCode = '',
+  initialFrac = 0.7,
+  maxFolds = 20
+): Promise<CrossValResult> {
+  const extFromModel = (model.params as { externalTransform?: string }).externalTransform
+  const externalTransform = extFromModel ?? getExternalTransform(transformCode)
+
+  return postJson<CrossValResult>('crossval', {
+    series: series.values,
+    freq: series.freq,
+    start: series.start,
+    family: model.family,
+    degree: model.params.degree,
+    seasonal: model.params.seasonal,
+    harmonics: model.params.harmonics,
+    transformLog: model.params.transformLog,
+    externalTransform,
+    horizon,
+    initialFrac,
+    maxFolds,
   })
 }
 

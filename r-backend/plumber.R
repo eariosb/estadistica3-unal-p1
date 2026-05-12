@@ -238,6 +238,34 @@ function(req, res) {
   )
 }
 
+# ── POST /timesight/crossval ──────────────────────────────────────────────────
+
+#* Validación cruzada rolling-window: MAE, RMSE, MAPE por horizonte
+#* @post /timesight/crossval
+#* @serializer json list(auto_unbox = TRUE)
+function(req, res) {
+  body <- tryCatch(jsonlite::fromJSON(req$postBody, simplifyVector = FALSE),
+                   error = function(e) NULL)
+  if (is.null(body)) { res$status <- 400L; return(list(error = "Body inválido.")) }
+  tryCatch(
+    ts_crossval(
+      values             = unlist(body[["series"]]),
+      freq               = body[["freq"]]              %||% 1,
+      start              = unlist(body[["start"]])     %||% c(2000, 1),
+      family             = body[["family"]]             %||% "polynomial",
+      degree             = body[["degree"]]             %||% 2,
+      seasonal           = body[["seasonal"]]           %||% "none",
+      harmonics          = body[["harmonics"]]          %||% 2,
+      transform_log      = isTRUE(body[["transformLog"]]),
+      external_transform = body[["externalTransform"]] %||% "none",
+      horizon            = body[["horizon"]]            %||% NULL,
+      initial_frac       = body[["initialFrac"]]       %||% 0.7,
+      max_folds          = body[["maxFolds"]]          %||% 20
+    ),
+    error = function(e) { res$status <- 500L; list(error = conditionMessage(e)) }
+  )
+}
+
 # ── POST /timesight/builtin ───────────────────────────────────────────────────
 
 #* Devuelve los valores de un dataset de R incluido en el curso

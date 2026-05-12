@@ -103,17 +103,25 @@ function RegressionLegend({ model, isLog, hasDuan }:
     items.push({ sym: '\\hat{Y}_t', desc: 'Valor ajustado en escala original' })
   }
 
-  names.forEach((n, i) => {
+  names.forEach((n) => {
     const v = fmt(coefs[n], 4)
-    if (i === 0) {
-      items.push({ sym: `\\hat{\\beta}_0 = ${v}`, desc: 'Intercepto: nivel base cuando t = 0 y todas las dummies = 0' })
-    } else if (n === 'X2' || n === 't1' || (i === 1 && names.length > 1)) {
-      items.push({ sym: `\\hat{\\beta}_1 = ${v}`, desc: isLog
-        ? `Pendiente en log-escala — tasa de crecimiento ≈ ${((Math.exp(coefs[n]) - 1) * 100).toFixed(2)}% por período`
-        : `Tendencia lineal: la serie cambia ${v} unidades por período` })
-    } else if (n.startsWith('X') && i > 1) {
-      const periodIdx = i - 1
-      items.push({ sym: `\\hat{\\delta}_{${periodIdx}} = ${v}`, desc: `Efecto estacional del período ${periodIdx} respecto al de referencia` })
+    if (n === 'beta0') {
+      items.push({ sym: `\\hat{\\beta}_0 = ${v}`, desc: 'Intercepto: nivel medio del período de referencia (t = 0)' })
+    } else if (/^t\d+$/.test(n)) {
+      const deg = parseInt(n.replace('t', ''))
+      if (deg === 1) {
+        items.push({ sym: `\\hat{\\beta}_1 = ${v}`, desc: isLog
+          ? `Tendencia log-lineal → crecimiento ≈ ${((Math.exp(coefs[n]) - 1) * 100).toFixed(2)}% por período`
+          : `Tendencia β₁: la serie crece ${v} unidades por período` })
+      } else {
+        items.push({ sym: `\\hat{\\beta}_{${deg}} = ${v}`, desc: `Componente de tendencia de orden ${deg} (t^{${deg}})` })
+      }
+    } else if (n.startsWith('I_')) {
+      const period = n.replace('I_', '')
+      items.push({ sym: `\\hat{\\delta}_{\\text{${period}}} = ${v}`, desc: `Desviación media de ${period} respecto al período de referencia` })
+    } else if (/^(sen|cos)\d+$/.test(n)) {
+      const k = n.replace(/^(sen|cos)/, '')
+      items.push({ sym: `\\hat{\\gamma}_{${k}} = ${v}`, desc: `${n.startsWith('sen') ? 'Seno' : 'Coseno'} del armónico ${k} de Fourier` })
     }
   })
 
@@ -277,17 +285,44 @@ function ModelResults({ model }: { model: FittedModel }) {
                   const est  = model.coefficients[name]
                   const pval = model.pvalues[name]
                   const sig  = sigStars(pval)
-                  const isInt = i === 0
-                  const isTrend = name === 'X1' || name === 't1' || (i === 1 && !isArima)
-                  const isDummy = name.startsWith('X') && i > 1 && !isArima
                   const pSig = pval !== null && pval !== undefined && isFinite(pval) && pval < 0.05
-                  
+
+                  // Clasificación por nombre semántico (nuevos nombres del backend)
+                  const isInt     = name === 'beta0'
+                  const isTrend   = /^t\d+$/.test(name)
+                  const isDummy   = name.startsWith('I_')
+                  const isFourier = /^(sen|cos)\d+$/.test(name)
+
+                  // Grado de la tendencia (t1 → 1, t2 → 2, ...)
+                  const tDegree = isTrend ? parseInt(name.replace('t', '')) : 0
+                  // Período del dummy (I_Feb → Feb, I_T2 → T2, ...)
+                  const dPeriod = isDummy ? name.replace('I_', '') : ''
+
                   let interp = ''
-                  if (isInt)   interp = 'Nivel base (t=0)'
-                  else if (isTrend && isLog) interp = `Crecimiento ≈ ${((Math.exp(est) - 1) * 100).toFixed(2)}%/período`
-                  else if (isTrend) interp = `Tendencia: +${est.toFixed(4)}/período`
-                  else if (isDummy) interp = `Efecto estacional período ${i - 1}`
-                  else interp = isArima ? 'Coef. ARIMA' : 'Efecto adicional'
+                  if (isArima) {
+                    if (/^ar\d/.test(name))  interp = `AR(${name.replace('ar','')}) — inercia: influencia de Y en t−${name.replace('ar','')}`
+                    else if (/^ma\d/.test(name))  interp = `MA(${name.replace('ma','')}) — memoria del error en t−${name.replace('ma','')}`
+                    else if (/^sar\d/.test(name)) interp = `SAR estacional orden ${name.replace('sar','')}`
+                    else if (/^sma\d/.test(name)) interp = `SMA estacional orden ${name.replace('sma','')}`
+                    else if (/drift|mean/i.test(name)) interp = 'Constante (drift): tendencia determinística'
+                    else interp = 'Coef. ARIMA'
+                  } else if (isInt) {
+                    interp = 'Intercepto β₀: nivel medio del período de referencia'
+                  } else if (isTrend) {
+                    if (tDegree === 1 && isLog)
+                      interp = `Tendencia log-lineal → crecimiento ≈ ${((Math.exp(est) - 1) * 100).toFixed(2)}%/período`
+                    else if (tDegree === 1)
+                      interp = `Tendencia β₁: ${est >= 0 ? '+' : ''}${est.toFixed(4)} unidades/período`
+                    else
+                      interp = `Componente de tendencia de orden ${tDegree} (t^${tDegree})`
+                  } else if (isDummy) {
+                    interp = `Efecto medio de ${dPeriod} vs. el período de referencia (enero)`
+                  } else if (isFourier) {
+                    const k = name.replace(/^(sen|cos)/, '')
+                    interp = `${name.startsWith('sen') ? 'Seno' : 'Coseno'} del armónico ${k} — componente estacional`
+                  } else {
+                    interp = 'Efecto adicional'
+                  }
 
                   return (
                     <tr key={name} className={`border-b border-stone-100 ${pSig ? '' : 'opacity-60'}`}>
@@ -329,7 +364,7 @@ function ModelResults({ model }: { model: FittedModel }) {
             ) : (
               <p><strong>Coeficiente de tendencia:</strong> Cada unidad de tiempo la serie cambia en promedio {fmt(model.coefficients['X1'] ?? model.coefficients['t1'], 4)} unidades (tendencia <em>aditiva</em>).</p>
             )}
-            <p><strong>Variables estacionales:</strong> Los coeficientes de las dummies miden la desviación promedio de cada período respecto al período de referencia (último período del año). Un coeficiente negativo indica un período típicamente bajo.</p>
+            <p><strong>Variables estacionales:</strong> Los coeficientes de las dummies (I_Feb, I_Mar, …) miden la desviación promedio de cada período respecto al <strong>período de referencia (enero / T1 / P1)</strong>. Un coeficiente negativo indica un período típicamente más bajo que la referencia.</p>
             <p><strong>P-valores:</strong> Un coeficiente no significativo (p &gt; 0.05) sugiere que esa variable no aporta información útil. Considera simplificar el modelo eliminando términos no significativos.</p>
           </div>
         )}
@@ -501,7 +536,7 @@ export default function ModelPage() {
 
   const seasonalOpts = [
     { id: 'none',    label: 'Sin estacionalidad', tooltip: 'No incluye componente estacional en el modelo.' },
-    { id: 'dummy',   label: 'Variables dummy',    tooltip: 'Crea S-1 indicadoras de período estacional (meses, trimestres…). Ref = último período.' },
+    { id: 'dummy',   label: 'Variables dummy',    tooltip: 'Crea S-1 indicadoras de período estacional (meses, trimestres…). Ref = primer período (Ene / T1). Los coeficientes miden la desviación respecto a ese período base.' },
     { id: 'fourier', label: 'Ondas de Fourier',   tooltip: 'Modela la estacionalidad con senos y cosenos. Más flexible para ciclos irregulares.' },
   ]
 
@@ -634,7 +669,7 @@ export default function ModelPage() {
             </div>
           )}
 
-          {/* Nota informativa cuando hay log externo y el checkbox está oculto */}
+          {/* Nota informativa cuando hay log externo */}
           {hasExternalLog && (
             <div className="mb-5 p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-800">
               <strong>Back-transform automático activado:</strong> La serie ya está en escala log — el
@@ -660,14 +695,13 @@ export default function ModelPage() {
           : fittedModel ? '↺ Re-ajustar con nueva configuración' : '▶ Ajustar modelo →'}
       </button>
 
-      {/* Hint pedagógico antes de ver resultados */}
       {!fittedModel && !loading && (
         <p className="text-xs text-stone-400 mt-2">
+          💡 Tras ajustar, revisa los diagnósticos de residuales para validar que el modelo captura correctamente la estructura de la serie.
           💡 Tras ajustar, revisa los diagnósticos de residuales para validar que el modelo captura correctamente la estructura de la serie.
         </p>
       )}
 
-      {/* ── Resultados ── */}
       {fittedModel && <ModelResults model={fittedModel} />}
     </div>
   )
