@@ -16,6 +16,25 @@ import type {
 
 const API_BASE = '/api/timesight'
 
+// ── Helper: deriva el tipo de transformación externa desde el código R ────────
+// Usado para pasar externalTransform al backend y activar el back-transform
+// correcto. El backend usa este valor para: (1) saber en qué escala están los
+// valores y (2) qué operación inversa aplicar antes de devolver resultados.
+
+export type ExternalTransform = 'none' | 'log' | 'sqrt' | 'diff' | 'logdiff'
+
+export function getExternalTransform(transformCode: string): ExternalTransform {
+  if (!transformCode || transformCode === 'x' || transformCode === '') return 'none'
+  const hasLog  = /\blog\s*\(/.test(transformCode)
+  const hasDiff = /\bdiff\s*\(/.test(transformCode)
+  const hasSqrt = /\bsqrt\s*\(/.test(transformCode)
+  if (hasLog && hasDiff) return 'logdiff'
+  if (hasLog)  return 'log'
+  if (hasDiff) return 'diff'
+  if (hasSqrt) return 'sqrt'
+  return 'none'
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 // El proxy Next.js acepta { endpoint, payload } y reenvía a R /timesight/<endpoint>
 
@@ -61,7 +80,8 @@ export async function apiTransform(
 
 export async function apiModelFit(
   series: TSeries,
-  params: ModelParams
+  params: ModelParams,
+  transformCode = ''
 ): Promise<FittedModel> {
   return postJson<FittedModel>('model-fit', {
     series: series.values,
@@ -72,6 +92,7 @@ export async function apiModelFit(
     seasonal: params.seasonal,
     harmonics: params.harmonics,
     transformLog: params.transformLog,
+    externalTransform: getExternalTransform(transformCode),
   })
 }
 
@@ -98,8 +119,14 @@ export async function apiForecast(
   model: FittedModel,
   horizon: number,
   confidenceLevel: number,
-  biasCorrection: BiasCorrection
+  biasCorrection: BiasCorrection,
+  transformCode = ''
 ): Promise<ForecastResult> {
+  // Prioridad: externalTransform guardado en params del modelo (más fiable que
+  // recomputar desde transformCode, ya que el modelo ya lo conoció al ajustar).
+  const extFromModel = (model.params as { externalTransform?: string }).externalTransform
+  const externalTransform = extFromModel ?? getExternalTransform(transformCode)
+
   return postJson<ForecastResult>('forecast', {
     series: series.values,
     freq: series.freq,
@@ -113,6 +140,7 @@ export async function apiForecast(
     horizon,
     confidenceLevel,
     biasCorrection,
+    externalTransform,
   })
 }
 

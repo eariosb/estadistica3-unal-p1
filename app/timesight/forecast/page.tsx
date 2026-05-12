@@ -7,7 +7,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTimeSightStore, type BiasCorrection, FREQ_LABELS } from '@/lib/timesight-store'
-import { apiForecast } from '@/lib/timesight-api'
+import { apiForecast, getExternalTransform } from '@/lib/timesight-api'
+import TooltipIcon from '@/components/TooltipIcon'
 
 function RPlot({ b64, alt }: { b64: string; alt: string }) {
   const [zoom, setZoom] = useState(false)
@@ -28,26 +29,10 @@ function RPlot({ b64, alt }: { b64: string; alt: string }) {
   )
 }
 
-function TooltipIcon({ text }: { text: string }) {
-  const [show, setShow] = useState(false)
-  return (
-    <span className="relative inline-block ml-1">
-      <button onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}
-        className="w-4 h-4 rounded-full bg-stone-200 text-xs font-bold inline-flex items-center justify-center hover:bg-blue-100 hover:text-blue-700"
-        tabIndex={-1}>i</button>
-      {show && (
-        <div className="absolute left-full top-0 ml-2 w-64 p-2 bg-stone-800 text-white text-xs rounded-lg shadow-xl z-50 leading-relaxed">
-          {text}
-        </div>
-      )}
-    </span>
-  )
-}
-
 export default function ForecastPage() {
   const router = useRouter()
   const {
-    series, transformedSeries, fittedModel,
+    series, transformedSeries, transformCode, fittedModel,
     forecastHorizon, confidenceLevel, biasCorrection,
     forecastResult, setForecastHorizon, setConfidenceLevel,
     setBiasCorrection, setForecastResult,
@@ -56,6 +41,7 @@ export default function ForecastPage() {
   const activeSeries = transformedSeries ?? series
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const extTransform = getExternalTransform(transformCode)
 
   if (!fittedModel) {
     return (
@@ -74,7 +60,8 @@ export default function ForecastPage() {
     setLoading(true); setError(null)
     try {
       const result = await apiForecast(
-        activeSeries, fittedModel, forecastHorizon, confidenceLevel, biasCorrection
+        activeSeries, fittedModel, forecastHorizon, confidenceLevel, biasCorrection,
+        transformCode  // para que el backend aplique el back-transform correcto
       )
       setForecastResult(result)
     } catch (e: unknown) {
@@ -168,6 +155,41 @@ export default function ForecastPage() {
       {/* Resultados */}
       {f && (
         <div className="space-y-5">
+
+          {/* Nota de escala — del backend (siempre presente) */}
+          {f.scaleNote && (
+            <div className={['p-3 rounded-xl border text-xs leading-relaxed font-medium',
+              f.scaleNote.startsWith('⚠️')
+                ? 'bg-amber-50 border-amber-300 text-amber-800'
+                : 'bg-purple-50 border-purple-200 text-purple-800',
+            ].join(' ')}>
+              {f.scaleNote}
+            </div>
+          )}
+
+          {/* Panel adicional para diff — explica cómo hacer back-transform manual */}
+          {(extTransform === 'diff' || extTransform === 'logdiff') && (
+            <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 space-y-2">
+              <p className="font-bold text-sm">⚠️ Pronósticos en escala diferenciada</p>
+              <p>La serie fue diferenciada en el paso 3. Los pronósticos representan <strong>cambios</strong> (ΔŶ), no niveles absolutos.</p>
+              {extTransform === 'diff' && (
+                <div className="bg-white rounded-lg p-2 font-mono text-xs border border-amber-200">
+                  <p className="text-stone-600 mb-1"># Para recuperar niveles en R:</p>
+                  <p>y_last &lt;- tail(serie_original, 1)</p>
+                  <p>niveles &lt;- y_last + cumsum(pronosticos)</p>
+                </div>
+              )}
+              {extTransform === 'logdiff' && (
+                <div className="bg-white rounded-lg p-2 font-mono text-xs border border-amber-200">
+                  <p className="text-stone-600 mb-1"># Para recuperar niveles desde log-diff:</p>
+                  <p>log_y_last &lt;- log(tail(serie_original, 1))</p>
+                  <p>log_niveles &lt;- log_y_last + cumsum(pronosticos)</p>
+                  <p>niveles &lt;- exp(log_niveles)</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Fan chart de R */}
           {f.plots.length > 0 && (
             <div>
@@ -211,11 +233,21 @@ export default function ForecastPage() {
             </div>
           </div>
 
-          {/* Corrección aplicada */}
+          {/* Corrección de Duan cuando aplica */}
           {f.smearingFactor !== 1 && (
-            <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-800">
-              🔬 Factor de corrección de Duan aplicado: <strong>{f.smearingFactor.toFixed(4)}</strong>.
-              Las predicciones están en escala original, sin sesgo.
+            <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-800 space-y-1">
+              <p>
+                🔬 <strong>Corrección de sesgo de Duan aplicada</strong> — factor = {f.smearingFactor.toFixed(4)}.
+              </p>
+              <p className="text-purple-700">
+                <strong>¿Por qué es necesaria?</strong> Al pronosticar en escala original después de ajustar en log-escala,
+                E[exp(Ẑ)] ≠ exp(E[Ẑ]) por la concavidad de exp() (desigualdad de Jensen).
+                El estimador naive exp(Ẑ) subestima la media. El estimador de Duan corrige esto multiplicando por
+                la media de los exp(residuales): E[Y] ≈ exp(Ẑ) × mean(exp(ê_i)).
+              </p>
+              <p className="text-purple-600 italic">
+                Los intervalos de confianza mostrados también están en escala original y son asimétricos (asimetría correcta y esperada al transformar IC simétricos en log-escala).
+              </p>
             </div>
           )}
 

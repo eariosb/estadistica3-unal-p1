@@ -70,7 +70,10 @@ export function Modulo3Content() {
           ajuste del modelo</strong> —el R², AIC y los residuos son idénticos—
           pero sí cambia la interpretación de los coeficientes. En R,{" "}
           <code>seasonaldummy(yt)</code> omite por defecto la última estación
-          (diciembre para datos mensuales).
+          (diciembre para datos mensuales); en nuestros ejemplos usamos{" "}
+          <code>relevel()</code> para fijar <strong>enero</strong> como
+          referencia, que es la convención más intuitiva en un ciclo anual
+          (la primera temporada como punto de comparación).
         </p>
       </Callout>
 
@@ -78,17 +81,18 @@ export function Modulo3Content() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 my-4">
         <div className="p-4 rounded-lg border border-blue-200 bg-blue-50">
           <p className="font-semibold text-blue-800 text-sm mb-2">Modelo aditivo</p>
-          <D c="\delta_i = E[Y_t \mid \text{estación } i] - E[Y_t \mid \text{estación } s]" />
+          <D c="\delta_i = E[Y_t \mid \text{estación } i] - E[Y_t \mid \text{estación ref}]" />
           <p className="text-sm text-stone-600 mt-2">
             Diferencia <em>absoluta</em> en el nivel medio entre la estación i
-            y la estación de referencia. Si <I c="\hat{\delta}_{\text{Jul}} = 14.2" />{" "}
+            y la estación de referencia (enero). Si{" "}
+            <I c="\hat{\delta}_{\text{Jul}} = 14.2" />{" "}
             con datos de temperatura, julio es en promedio 14.2°F más cálido
-            que diciembre.
+            que enero.
           </p>
         </div>
         <div className="p-4 rounded-lg border border-emerald-200 bg-emerald-50">
           <p className="font-semibold text-emerald-800 text-sm mb-2">Modelo multiplicativo (log)</p>
-          <D c="\exp(\delta_i) = \frac{E[Y_t \mid \text{estación } i]}{E[Y_t \mid \text{estación } s]}" />
+          <D c="\exp(\delta_i) = \frac{E[Y_t \mid \text{estación } i]}{E[Y_t \mid \text{estación ref}]}" />
           <p className="text-sm text-stone-600 mt-2">
             Razón entre el nivel medio de la estación i y el de referencia.
             Si <I c="\exp(\hat{\delta}_i) = 1.35" /> → la estación i tiene un
@@ -219,12 +223,12 @@ cat(sprintf("Amplitud 1ª mitad: %.1f  |  2ª mitad: %.1f  |  ratio: %.2f\\n",
         <ol className="mt-1 list-decimal list-inside space-y-1 text-sm">
           <li>
             El <code>summary(mod_est)</code> con los 11 coeficientes{" "}
-            <I c="\hat{\delta}_i" /> para los meses de enero a noviembre
-            (diciembre = referencia). Todos deberían ser significativos.
+            <I c="\hat{\delta}_i" /> para los meses de febrero a diciembre
+            (enero = referencia). Todos deberían ser significativos.
           </li>
           <li>
             Un gráfico de barras con los efectos estacionales: barras rojas
-            (temperatura sobre diciembre) vs azules (bajo diciembre).
+            (temperatura sobre enero) vs azules (bajo enero).
           </li>
           <li>
             La serie observada vs la curva ajustada: debería estar muy cerca
@@ -245,20 +249,25 @@ yt <- nottem
 n  <- length(yt)             # 240
 t  <- 1:n
 
-# ── s-1 = 11 indicadoras; referencia = diciembre (mes 12) ─
-# seasonaldummy() genera 11 columnas binarias automáticamente
-dum_nottem <- seasonaldummy(yt)
-datos      <- data.frame(yt = as.numeric(yt), dum_nottem)
-mod_est    <- lm(yt ~ ., data = datos)
+# ── s-1 = 11 indicadoras; referencia = enero (mes 1) ──────
+# Creamos un factor con etiquetas de mes y relevamos enero
+meses_lab  <- c("Ene","Feb","Mar","Abr","May","Jun",
+                "Jul","Ago","Sep","Oct","Nov","Dic")
+mes_factor <- factor(cycle(yt), levels = 1:12, labels = meses_lab)
+mes_factor <- relevel(mes_factor, ref = "Ene")  # enero = categoría de referencia
+datos      <- data.frame(yt = as.numeric(yt), mes = mes_factor)
+mod_est    <- lm(yt ~ mes, data = datos)
 cat("R² ajustado:", round(summary(mod_est)$adj.r.squared, 4), "\\n")
 cat("RMSE:", round(sqrt(mean(residuals(mod_est)^2)), 3), "°F\\n\\n")
 summary(mod_est)
+# Intercepto = nivel medio de ENERO
+# mesFeb, mesMar, ..., mesDic = diferencia respecto a enero
 
 # ── Efectos estacionales: δ̂ᵢ ─────────────────────────────
 coefs     <- coef(mod_est)
 meses     <- c("Ene","Feb","Mar","Abr","May","Jun",
                "Jul","Ago","Sep","Oct","Nov","Dic")
-delta_est <- c(coefs[-1], 0)   # δ₁₂ = 0 (referencia)
+delta_est <- c(0, coefs[-1])   # δ₁ = 0 (enero = referencia)
 df_delta  <- data.frame(
   Mes   = factor(meses, levels = meses),
   delta = delta_est
@@ -269,8 +278,8 @@ ggplot(df_delta, aes(x = Mes, y = delta, fill = delta > 0)) +
   geom_hline(yintercept = 0, colour = "black", linewidth = 0.5) +
   scale_fill_manual(values = c("TRUE" = "#ef4444", "FALSE" = "#3b82f6")) +
   labs(
-    title    = "Efectos estacionales — nottem (ref = diciembre)",
-    subtitle = "δ̂ᵢ: diferencia de temperatura respecto a diciembre (°F)",
+    title    = "Efectos estacionales — nottem (ref = enero)",
+    subtitle = "δ̂ᵢ: diferencia de temperatura respecto a enero (°F)",
     x = NULL, y = "δ̂ᵢ (°F)"
   ) +
   theme_bw(base_size = 12)
@@ -295,17 +304,17 @@ ggplot(df_fit, aes(x = Año)) +
        x = "Año", y = "Temperatura (°F)", colour = NULL) +
   theme_bw(base_size = 12) +
   theme(legend.position = "top")`}
-        caption="Con 11 indicadoras el modelo captura >97% de la variación de nottem. Enero y febrero tendrán los δ̂ más negativos (~−11°F); julio y agosto los más positivos (~+14°F). La línea ajustada debería seguir casi perfectamente la serie observada."
+        caption="Con 11 indicadoras el modelo captura >97% de la variación de nottem. El intercepto es la temperatura media de enero (~39°F). Julio y agosto tendrán los δ̂ más positivos (~+14°F respecto a enero); diciembre y noviembre los más negativos (~−11°F). La línea ajustada debería seguir casi perfectamente la serie observada."
       />
 
       <Callout type="example" title="Cómo leer el summary() en un modelo estacional">
         <p>
           El intercepto (<code>Intercept</code>) es el nivel medio de{" "}
-          <strong>diciembre</strong> (la categoría de referencia). Cada
-          coeficiente <code>Ene</code>, <code>Feb</code>, etc. es la diferencia
-          media de temperatura de ese mes respecto a diciembre. Todos deberían
-          aparecer con p-valor ≈ 0 (tres asteriscos) porque el patrón estacional
-          de nottem es muy claro.
+          <strong>enero</strong> (la categoría de referencia). Cada
+          coeficiente <code>mesFeb</code>, <code>mesMar</code>, …,{" "}
+          <code>mesDic</code> es la diferencia media de temperatura de ese
+          mes respecto a enero. Todos deberían aparecer con p-valor ≈ 0
+          (tres asteriscos) porque el patrón estacional de nottem es muy claro.
         </p>
         <p className="mt-2">
           Si un coeficiente no es significativo (p-valor grande), significa que
@@ -320,35 +329,41 @@ ggplot(df_fit, aes(x = Año)) +
         title="▶ interpdeltas() — efectos estacionales con IC 95%"
         code={`library(forecast)
 
-yt      <- nottem
-dum_not <- seasonaldummy(yt)
-mod_est <- lm(as.numeric(yt) ~ dum_not)
+yt <- nottem
+
+# ── Modelo con enero como referencia ─────────────────────
+meses_lab  <- c("Ene","Feb","Mar","Abr","May","Jun",
+                "Jul","Ago","Sep","Oct","Nov","Dic")
+mes_factor <- factor(cycle(yt), levels = 1:12, labels = meses_lab)
+mes_factor <- relevel(mes_factor, ref = "Ene")
+mod_est    <- lm(as.numeric(yt) ~ mes_factor)
 
 # ── Función interpdeltas ──────────────────────────────────
-interpdeltas <- function(modelo, s, nombres_est = NULL) {
+# ref_idx: posición del mes de referencia en nombres_est (1 = enero)
+interpdeltas <- function(modelo, s, nombres_est = NULL, ref_idx = 1) {
   co     <- summary(modelo)$coefficients
   idx    <- (nrow(co) - s + 2):nrow(co)
   deltas <- co[idx, 1]
   se_d   <- co[idx, 2]
   df_out <- data.frame(
-    Estacion  = if (!is.null(nombres_est)) nombres_est[-s]
-                else paste0("S", 1:(s-1)),
+    Estacion  = if (!is.null(nombres_est)) nombres_est[-ref_idx]
+                else paste0("S", seq_len(s - 1)),
     delta_hat = round(deltas, 3),
     exp_delta = round(exp(deltas), 4),
     IC_inf    = round(deltas - 1.96 * se_d, 3),
     IC_sup    = round(deltas + 1.96 * se_d, 3),
     signif    = ifelse(abs(deltas) > 1.96 * se_d, "***", "ns")
   )
-  cat("Efectos estacionales con IC 95%:\\n")
+  cat(sprintf("Efectos estacionales con IC 95%%  (ref = %s):\\n",
+              if (!is.null(nombres_est)) nombres_est[ref_idx] else "S1"))
   print(df_out)
   cat("\\nNota: exp_delta = factor multiplicativo",
       "(útil cuando el modelo es log(Y))\\n")
   invisible(df_out)
 }
 
-meses <- c("Ene","Feb","Mar","Abr","May","Jun",
-           "Jul","Ago","Sep","Oct","Nov","Dic")
-interpdeltas(mod_est, s = 12, nombres_est = meses)`}
+# ref_idx = 1 → enero es la referencia; la tabla muestra Feb–Dic
+interpdeltas(mod_est, s = 12, nombres_est = meses_lab, ref_idx = 1)`}
         caption="exp_delta: si el modelo estuviera en escala log, este sería el factor por el que se multiplica el nivel en la estación i respecto a la de referencia. En el modelo aditivo (nottem), delta_hat es directamente el efecto en °F."
       />
 

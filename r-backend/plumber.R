@@ -173,14 +173,15 @@ function(req, res) {
   if (is.null(body)) { res$status <- 400L; return(list(error = "Body inválido.")) }
   tryCatch(
     ts_model_fit(
-      values        = unlist(body[["series"]]),
-      freq          = body[["freq"]]         %||% 1,
-      start         = unlist(body[["start"]]) %||% c(2000, 1),
-      family        = body[["family"]]        %||% "polynomial",
-      degree        = body[["degree"]]        %||% 2,
-      seasonal      = body[["seasonal"]]      %||% "none",
-      harmonics     = body[["harmonics"]]     %||% 2,
-      transform_log = isTRUE(body[["transformLog"]])
+      values             = unlist(body[["series"]]),
+      freq               = body[["freq"]]              %||% 1,
+      start              = unlist(body[["start"]])     %||% c(2000, 1),
+      family             = body[["family"]]             %||% "polynomial",
+      degree             = body[["degree"]]             %||% 2,
+      seasonal           = body[["seasonal"]]           %||% "none",
+      harmonics          = body[["harmonics"]]          %||% 2,
+      transform_log      = isTRUE(body[["transformLog"]]),
+      external_transform = body[["externalTransform"]] %||% "none"
     ),
     error = function(e) { res$status <- 500L; list(error = conditionMessage(e)) }
   )
@@ -219,18 +220,19 @@ function(req, res) {
   if (is.null(body)) { res$status <- 400L; return(list(error = "Body inválido.")) }
   tryCatch(
     ts_forecast(
-      values           = unlist(body[["series"]]),
-      freq             = body[["freq"]]            %||% 1,
-      start            = unlist(body[["start"]])   %||% c(2000, 1),
-      family           = body[["family"]]           %||% "polynomial",
-      degree           = body[["degree"]]           %||% 2,
-      seasonal         = body[["seasonal"]]         %||% "none",
-      harmonics        = body[["harmonics"]]        %||% 2,
-      transform_log    = isTRUE(body[["transformLog"]]),
-      smearing_factor  = body[["smearingFactor"]]   %||% 1,
-      horizon          = body[["horizon"]]          %||% 12,
-      confidence_level = body[["confidenceLevel"]]  %||% 95,
-      bias_correction  = body[["biasCorrection"]]   %||% "duan"
+      values             = unlist(body[["series"]]),
+      freq               = body[["freq"]]              %||% 1,
+      start              = unlist(body[["start"]])     %||% c(2000, 1),
+      family             = body[["family"]]             %||% "polynomial",
+      degree             = body[["degree"]]             %||% 2,
+      seasonal           = body[["seasonal"]]           %||% "none",
+      harmonics          = body[["harmonics"]]          %||% 2,
+      transform_log      = isTRUE(body[["transformLog"]]),
+      smearing_factor    = body[["smearingFactor"]]    %||% 1,
+      horizon            = body[["horizon"]]            %||% 12,
+      confidence_level   = body[["confidenceLevel"]]   %||% 95,
+      bias_correction    = body[["biasCorrection"]]    %||% "duan",
+      external_transform = body[["externalTransform"]] %||% "none"
     ),
     error = function(e) { res$status <- 500L; list(error = conditionMessage(e)) }
   )

@@ -7,7 +7,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTimeSightStore, type ModelFamily, type FittedModel } from '@/lib/timesight-store'
-import { apiModelFit } from '@/lib/timesight-api'
+import { apiModelFit, getExternalTransform } from '@/lib/timesight-api'
+import TooltipIcon from '@/components/TooltipIcon'
+import { Math as KaTeX } from '@/components/Math'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -32,19 +34,111 @@ function sigStars(p: number | null | undefined): string {
   return ''
 }
 
-function TooltipIcon({ text }: { text: string }) {
-  const [show, setShow] = useState(false)
+// ── Leyenda ARIMA ─────────────────────────────────────────────────────────────
+
+function ArimaLegend({ model }: { model: FittedModel }) {
+  const ord = model.arimaOrder
+  const coefs = model.coefficients
+  const arNames  = Object.keys(coefs).filter(k => /^ar\d/.test(k))
+  const maNames  = Object.keys(coefs).filter(k => /^ma\d/.test(k))
+  const sarNames = Object.keys(coefs).filter(k => /^sar\d/.test(k))
+  const smaNames = Object.keys(coefs).filter(k => /^sma\d/.test(k))
+  const hasDrift = Object.keys(coefs).some(k => /drift|intercept|mean/i.test(k))
+
+  const items: { sym: string; desc: string }[] = [
+    { sym: 'B', desc: 'Operador de retardo: BY_t = Y_{t−1}' },
+    { sym: '(1−B)', desc: `Diferenciación: (1−B)Y_t = Y_t − Y_{t−1}${ord?.d && ord.d > 1 ? ` — aplicada ${ord.d} veces` : ''}` },
+  ]
+  if ((ord?.P ?? 0) > 0 || (ord?.D ?? 0) > 0 || (ord?.Q ?? 0) > 0) {
+    items.push({ sym: `B^{${ord?.S ?? 's'}}`, desc: `Retardo estacional de período ${ord?.S}` })
+  }
+  arNames.forEach((n, i) => items.push({
+    sym: `\\varphi_${i+1}=${fmt(coefs[n], 4)}`,
+    desc: `Coeficiente autorregresivo AR(${i+1}): influencia del valor en t−${i+1}`,
+  }))
+  maNames.forEach((n, i) => items.push({
+    sym: `\\theta_${i+1}=${fmt(coefs[n], 4)}`,
+    desc: `Coeficiente de media móvil MA(${i+1}): influencia del error en t−${i+1}`,
+  }))
+  sarNames.forEach((n, i) => items.push({
+    sym: `\\Phi_${i+1}=${fmt(coefs[n], 4)}`,
+    desc: `Coeficiente SAR estacional de orden ${i+1}`,
+  }))
+  smaNames.forEach((n, i) => items.push({
+    sym: `\\Theta_${i+1}=${fmt(coefs[n], 4)}`,
+    desc: `Coeficiente SMA estacional de orden ${i+1}`,
+  }))
+  if (hasDrift) items.push({ sym: 'c', desc: 'Constante (drift): tendencia determinística en la serie diferenciada' })
+  items.push({ sym: '\\varepsilon_t', desc: 'Ruido blanco: error aleatorio con media 0 y varianza constante σ²' })
+
   return (
-    <span className="relative inline-block ml-1">
-      <button onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}
-        className="w-4 h-4 rounded-full bg-stone-200 text-xs font-bold inline-flex items-center justify-center hover:bg-blue-100 hover:text-blue-700"
-        tabIndex={-1}>i</button>
-      {show && (
-        <div className="absolute left-full top-0 ml-2 w-64 p-2 bg-stone-800 text-white text-xs rounded-lg shadow-xl z-50 leading-relaxed">
-          {text}
-        </div>
+    <div className="space-y-2">
+      <p className="text-xs font-semibold text-blue-800">Notación — operador de retardo B:</p>
+      <div className="grid grid-cols-1 gap-1">
+        {items.map(({ sym, desc }) => (
+          <div key={sym} className="flex items-baseline gap-2 text-xs text-blue-900">
+            <span className="font-mono shrink-0 min-w-[80px]">
+              <KaTeX math={sym} />
+            </span>
+            <span className="text-blue-700">— {desc}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Leyenda Regresión ─────────────────────────────────────────────────────────
+
+function RegressionLegend({ model, isLog, hasDuan }:
+  { model: FittedModel; isLog: boolean; hasDuan: boolean }) {
+  const coefs = model.coefficients
+  const names = Object.keys(coefs)
+
+  const items: { sym: string; desc: string }[] = []
+
+  if (isLog) {
+    items.push({ sym: '\\log(\\hat{Y}_t)', desc: 'Valor ajustado en escala logarítmica' })
+  } else {
+    items.push({ sym: '\\hat{Y}_t', desc: 'Valor ajustado en escala original' })
+  }
+
+  names.forEach((n, i) => {
+    const v = fmt(coefs[n], 4)
+    if (i === 0) {
+      items.push({ sym: `\\hat{\\beta}_0 = ${v}`, desc: 'Intercepto: nivel base cuando t = 0 y todas las dummies = 0' })
+    } else if (n === 'X2' || n === 't1' || (i === 1 && names.length > 1)) {
+      items.push({ sym: `\\hat{\\beta}_1 = ${v}`, desc: isLog
+        ? `Pendiente en log-escala — tasa de crecimiento ≈ ${((Math.exp(coefs[n]) - 1) * 100).toFixed(2)}% por período`
+        : `Tendencia lineal: la serie cambia ${v} unidades por período` })
+    } else if (n.startsWith('X') && i > 1) {
+      const periodIdx = i - 1
+      items.push({ sym: `\\hat{\\delta}_{${periodIdx}} = ${v}`, desc: `Efecto estacional del período ${periodIdx} respecto al de referencia` })
+    }
+  })
+
+  items.push({ sym: '\\varepsilon_t', desc: 'Error: diferencia entre el valor real Y_t y el ajustado Ŷ_t' })
+
+  return (
+    <div className="space-y-2">
+      {isLog && (
+        <p className="text-xs text-purple-700 font-semibold">
+          ✓ Ecuación en log-escala. Pronósticos devueltos a escala original
+          {hasDuan ? ` (corrección de Duan = ${(model.smearingFactor ?? 1).toFixed(4)})` : ''}.
+        </p>
       )}
-    </span>
+      <p className="text-xs font-semibold text-blue-800">Significado de cada término:</p>
+      <div className="grid grid-cols-1 gap-1">
+        {items.map(({ sym, desc }) => (
+          <div key={sym} className="flex items-baseline gap-2 text-xs text-blue-900">
+            <span className="font-mono shrink-0 min-w-[120px]">
+              <KaTeX math={sym} />
+            </span>
+            <span className="text-blue-700">— {desc}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -123,22 +217,37 @@ function ModelResults({ model }: { model: FittedModel }) {
         )}
       </div>
 
+      {/* ── Nota de escala (back-transform info del backend) ── */}
+      {model.scaleNote && (
+        <div className={['p-3 rounded-xl border text-xs leading-relaxed',
+          model.scaleNote.startsWith('⚠️')
+            ? 'bg-amber-50 border-amber-200 text-amber-800'
+            : 'bg-purple-50 border-purple-200 text-purple-800',
+        ].join(' ')}>
+          {model.scaleNote}
+        </div>
+      )}
+
       {/* ── Ecuación del modelo ── */}
       {model.equation && (
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
-          <div className="flex items-center gap-2 mb-1.5">
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-3">
+          <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
-              Ecuación ajustada
+              Ecuación estimada del modelo
             </span>
-            <TooltipIcon text="Expresión matemática del modelo con los coeficientes estimados. Los valores numéricos son los β̂ del modelo." />
+            <TooltipIcon text="Expresión matemática con los coeficientes estimados. Para ARIMA se usa la notación del operador de retardo B (donde BY_t = Y_{t-1}). Para regresión, los valores numéricos son los β̂ del modelo." />
           </div>
-          <code className="text-xs font-mono text-blue-900 bg-white border border-blue-100 rounded px-3 py-2 block break-all leading-relaxed">
-            {model.equation}
-          </code>
-          {isLog && (
-            <p className="text-xs text-purple-700 mt-1.5 font-medium">
-              ⚠️ El modelo fue ajustado en escala logarítmica. Los pronósticos se devuelven a escala original mediante corrección de sesgo{hasDuan ? ` (factor de Duan = ${(model.smearingFactor ?? 1).toFixed(4)})` : ''}.
-            </p>
+
+          {/* Render KaTeX */}
+          <div className="bg-white rounded-lg border border-blue-100 px-4 py-3 overflow-x-auto">
+            <KaTeX math={model.equation} display />
+          </div>
+
+          {/* Leyenda según tipo de modelo */}
+          {isArima ? (
+            <ArimaLegend model={model} />
+          ) : (
+            <RegressionLegend model={model} isLog={isLog} hasDuan={hasDuan} />
           )}
         </div>
       )}
@@ -252,14 +361,79 @@ function ModelResults({ model }: { model: FittedModel }) {
 
 // ── Página principal ──────────────────────────────────────────────────────────
 
+// ── Banner de coherencia transformación ─────────────────────────────────────
+
+function TransformBanner({ transformCode }: { transformCode: string }) {
+  const ext = getExternalTransform(transformCode)
+  if (ext === 'none') return null
+
+  const banners: Record<string, { icon: string; cls: string; title: string; body: string }> = {
+    log: {
+      icon: '🔢',
+      cls: 'bg-purple-50 border-purple-300 text-purple-900',
+      title: 'Serie en escala logarítmica (log aplicado en paso 3)',
+      body: 'Los valores actuales son log(Y_original). Los modelos Log-lineal y Exponencial han sido deshabilitados porque aplicarían log() de nuevo sobre datos ya en log-escala — esto modelaría log(log(Y)), que carece de sentido estadístico. El back-transform exp() + corrección de Duan se aplicará automáticamente en ajuste y pronóstico para devolver resultados a la escala original.',
+    },
+    sqrt: {
+      icon: '√',
+      cls: 'bg-teal-50 border-teal-300 text-teal-900',
+      title: 'Serie en escala raíz cuadrada (sqrt aplicado en paso 3)',
+      body: 'Los valores actuales son √Y_original. Los modelos actúan sobre la escala raíz. El back-transform cuadrático (·)² se aplica automáticamente en ajuste y pronóstico.',
+    },
+    diff: {
+      icon: 'Δ',
+      cls: 'bg-amber-50 border-amber-300 text-amber-900',
+      title: 'Serie diferenciada (diff aplicado en paso 3)',
+      body: 'Los valores actuales son ΔY_t = Y_t − Y_{t−1}. El modelo operará sobre primeras diferencias. Los pronósticos estarán en escala de cambios (no niveles). Para recuperar niveles se necesita sumar las diferencias pronosticadas al último valor observado. ARIMA con d=0 es la especificación apropiada, ya que la diferenciación ya fue aplicada externamente.',
+    },
+    logdiff: {
+      icon: '∂',
+      cls: 'bg-amber-50 border-amber-300 text-amber-900',
+      title: 'Serie log-diferenciada (diff(log(x)) aplicado en paso 3)',
+      body: 'Los valores actuales son log(Y_t) − log(Y_{t−1}) ≈ tasa de cambio porcentual. El modelo operará sobre estas tasas. Los pronósticos son cambios porcentuales aproximados, no niveles absolutos. ARIMA es el modelo más apropiado para esta escala.',
+    },
+  }
+
+  const b = banners[ext]
+  if (!b) return null
+
+  return (
+    <div className={`mb-5 p-4 rounded-xl border-2 ${b.cls}`}>
+      <div className="flex items-start gap-2">
+        <span className="text-xl">{b.icon}</span>
+        <div>
+          <p className="font-bold text-sm mb-1">{b.title}</p>
+          <p className="text-xs leading-relaxed">{b.body}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Página principal ──────────────────────────────────────────────────────────
+
 export default function ModelPage() {
   const router = useRouter()
-  const { series, transformedSeries, modelParams, setModelParams, setFittedModel, fittedModel } =
+  const { series, transformedSeries, transformCode, modelParams, setModelParams, setFittedModel, fittedModel } =
     useTimeSightStore()
 
   const activeSeries = transformedSeries ?? series
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState<string | null>(null)
+
+  // ── Detectar tipo de transformación externa ───────────────────────────────
+  const extTransform = getExternalTransform(transformCode)
+  const hasExternalLog  = extTransform === 'log'
+  const hasExternalSqrt = extTransform === 'sqrt'
+  const hasExternalDiff = extTransform === 'diff' || extTransform === 'logdiff'
+
+  // Si el usuario aplicó log externo y el modelParams aún tiene log/exponential,
+  // reset preventivo a polynomial para evitar double-log silencioso.
+  // (Se hace en render, no en store, para no corromper estado guardado)
+  const safeFamily: ModelFamily =
+    hasExternalLog && (modelParams.family === 'log' || modelParams.family === 'exponential')
+      ? 'polynomial'
+      : modelParams.family
 
   if (!activeSeries) {
     return (
@@ -274,40 +448,64 @@ export default function ModelPage() {
   const handleFit = async () => {
     setLoading(true); setError(null)
     try {
-      const model = await apiModelFit(activeSeries, modelParams)
+      // Pasar transformCode para que el backend sepa el tipo de back-transform
+      const model = await apiModelFit(
+        activeSeries,
+        { ...modelParams, family: safeFamily },
+        transformCode
+      )
       setFittedModel(model)
-      // Don't auto-redirect — show results here first
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al ajustar el modelo')
     } finally { setLoading(false) }
   }
 
-  const families: { id: ModelFamily; label: string; desc: string; tooltip: string }[] = [
+  // ── Familias disponibles según transformación ─────────────────────────────
+  // Regla de coherencia:
+  //   - log externo → log y exponential REDUNDANTES (aplicarían log de nuevo)
+  //   - sqrt externo → todos disponibles (√ no tiene familia equivalente)
+  //   - diff externo → todos disponibles; ARIMA con d=0 es más apropiado
+  //   - sin transformación → todos disponibles
+
+  const allFamilies: { id: ModelFamily; label: string; desc: string; tooltip: string; disabled?: boolean; disabledReason?: string }[] = [
     {
       id: 'polynomial', label: 'Polinomial', desc: 'Ŷ = β₀ + β₁t + β₂t² + … + ε',
-      tooltip: 'Tendencia capturada mediante un polinomio en el tiempo. Grado 1 = lineal, 2 = cuadrática, 3 = cúbica.',
+      tooltip: 'Tendencia capturada por un polinomio en el tiempo. Grado 1 = lineal, 2 = cuadrática, 3 = cúbica. Funciona sobre cualquier escala de datos.',
     },
     {
       id: 'log', label: 'Log-lineal', desc: 'log(Ŷ) = β₀ + β₁t + ε',
-      tooltip: 'El logaritmo estabiliza varianza multiplicativa. Ideal para series con crecimiento proporcional. Se aplica corrección de sesgo de Duan al pronosticar.',
+      tooltip: hasExternalLog
+        ? 'DESHABILITADO: la serie ya fue transformada con log en el paso 3. Aplicar log de nuevo modelaría log(log(Y)), lo cual no tiene sentido estadístico. Usa Polinomial o ARIMA sobre la serie ya en log-escala.'
+        : 'El logaritmo estabiliza varianza multiplicativa. Ideal cuando la serie crece proporcionalmente. Se aplica corrección de sesgo de Duan al pronosticar. Equivalente a ajustar una curva exponencial en escala original.',
+      disabled: hasExternalLog,
+      disabledReason: 'Redundante: la serie ya está en log-escala',
     },
     {
       id: 'exponential', label: 'Exponencial', desc: 'Ŷ = a · e^(bt)',
-      tooltip: 'Modelo de crecimiento o decaimiento exponencial puro. Equivale al log-lineal sin intercepto diferente a 0.',
+      tooltip: hasExternalLog
+        ? 'DESHABILITADO: la serie ya fue transformada con log. Aplicar exponencial internamente haría log(log(Y)).'
+        : 'Crecimiento o decaimiento exponencial puro. Internamente aplica log(Y) ~ t. Si la serie ya fue transformada externamente, este modelo es redundante.',
+      disabled: hasExternalLog,
+      disabledReason: 'Redundante: la serie ya está en log-escala',
     },
     {
       id: 'arima', label: 'ARIMA automático', desc: 'auto.arima() · selección por AIC',
-      tooltip: 'Ajusta automáticamente el mejor modelo ARIMA mediante criterio AIC. Incluye estacionalidad automática si freq > 1.',
+      tooltip: hasExternalDiff
+        ? 'Recomendado cuando la serie fue diferenciada externamente. auto.arima buscará ARIMA(p,0,q) sobre la serie ya diferenciada.'
+        : 'Ajusta automáticamente el mejor ARIMA mediante criterio AIC. Incluye estacionalidad automática si freq > 1.',
     },
   ]
 
+  const families = allFamilies.filter(f => !f.disabled)
+  const disabledFamilies = allFamilies.filter(f => f.disabled)
+
   const seasonalOpts = [
-    { id: 'none',   label: 'Sin estacionalidad', tooltip: 'No incluye componente estacional en el modelo.' },
-    { id: 'dummy',  label: 'Variables dummy',     tooltip: 'Crea S-1 indicadoras de período estacional (meses, trimestres…). Ref = último período.' },
-    { id: 'fourier',label: 'Ondas de Fourier',   tooltip: 'Modela la estacionalidad con senos y cosenos. Más flexible para ciclos irregulares.' },
+    { id: 'none',    label: 'Sin estacionalidad', tooltip: 'No incluye componente estacional en el modelo.' },
+    { id: 'dummy',   label: 'Variables dummy',    tooltip: 'Crea S-1 indicadoras de período estacional (meses, trimestres…). Ref = último período.' },
+    { id: 'fourier', label: 'Ondas de Fourier',   tooltip: 'Modela la estacionalidad con senos y cosenos. Más flexible para ciclos irregulares.' },
   ]
 
-  const isArima = modelParams.family === 'arima'
+  const isArima = safeFamily === 'arima'
 
   return (
     <div>
@@ -321,11 +519,14 @@ export default function ModelPage() {
         </p>
       </div>
 
+      {/* Banner de coherencia transformación→modelo */}
+      <TransformBanner transformCode={transformCode} />
+
       {/* ── Familia del modelo ── */}
       <div className="mb-5">
         <h2 className="text-sm font-semibold text-stone-700 mb-2">
           Familia del modelo
-          <TooltipIcon text="Elige el tipo de ecuación que mejor describe el comportamiento de tu serie." />
+          <TooltipIcon text="Elige el tipo de ecuación que mejor describe el comportamiento de tu serie. Algunos modelos pueden estar deshabilitados si son redundantes con la transformación aplicada en el paso 3." />
         </h2>
         <div className="grid grid-cols-2 gap-3">
           {families.map((f) => (
@@ -333,7 +534,7 @@ export default function ModelPage() {
               onClick={() => setModelParams({ family: f.id })}
               title={f.tooltip}
               className={['p-3 rounded-xl border-2 text-left transition-all',
-                modelParams.family === f.id
+                safeFamily === f.id
                   ? 'border-blue-500 bg-blue-50'
                   : 'border-stone-200 hover:border-blue-300',
               ].join(' ')}>
@@ -342,17 +543,29 @@ export default function ModelPage() {
             </button>
           ))}
         </div>
+
+        {/* Familias deshabilitadas (informativo) */}
+        {disabledFamilies.length > 0 && (
+          <div className="mt-2 p-2.5 bg-stone-100 border border-stone-200 rounded-lg">
+            <p className="text-xs text-stone-500 font-semibold mb-1">Modelos no disponibles con la transformación actual:</p>
+            {disabledFamilies.map(f => (
+              <p key={f.id} className="text-xs text-stone-400">
+                <strong>{f.label}</strong> — {f.disabledReason}
+              </p>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Opciones adicionales (solo si no es ARIMA) ── */}
       {!isArima && (
         <>
           {/* Grado polinomial */}
-          {modelParams.family === 'polynomial' && (
+          {safeFamily === 'polynomial' && (
             <div className="mb-5">
               <h2 className="text-sm font-semibold text-stone-700 mb-2">
                 Grado del polinomio
-                <TooltipIcon text="Grado 1 = línea recta, 2 = parábola, 3 = cúbica. Evita grados > 4: el modelo sobreajusta la muestra y pronostica mal." />
+                <TooltipIcon text="Grado 1 = línea recta, 2 = parábola, 3 = cúbica. Evita grados > 4: el modelo sobreajusta la muestra y pronostica mal fuera de la muestra." />
               </h2>
               <div className="flex gap-2">
                 {[1, 2, 3, 4].map((d) => (
@@ -375,7 +588,7 @@ export default function ModelPage() {
             <div className="mb-5">
               <h2 className="text-sm font-semibold text-stone-700 mb-2">
                 Componente estacional
-                <TooltipIcon text="¿Incluir variables para capturar el patrón estacional de la serie?" />
+                <TooltipIcon text="Incluir un componente estacional captura el patrón que se repite cada período (ej. pico en diciembre, caída en enero). Variables dummy: S-1 indicadoras. Fourier: senos/cosenos — más flexible para patrones complejos." />
               </h2>
               <div className="flex flex-wrap gap-2">
                 {seasonalOpts.map((s) => (
@@ -398,26 +611,37 @@ export default function ModelPage() {
                     value={modelParams.harmonics}
                     onChange={(e) => setModelParams({ harmonics: Number(e.target.value) })}
                     className="w-16 border border-stone-300 rounded px-2 py-1 text-sm" />
-                  <span className="text-xs text-stone-400">
-                    (máx. {Math.floor(activeSeries.freq / 2)})
-                  </span>
+                  <span className="text-xs text-stone-400">(máx. {Math.floor(activeSeries.freq / 2)})</span>
                 </div>
               )}
             </div>
           )}
 
-          {/* Corrección log */}
-          <div className="mb-5 flex items-start gap-3 p-3 bg-purple-50 border border-purple-200 rounded-xl">
-            <input type="checkbox" id="transformLog"
-              checked={modelParams.transformLog}
-              onChange={(e) => setModelParams({ transformLog: e.target.checked })}
-              className="mt-0.5" />
-            <label htmlFor="transformLog" className="text-sm text-purple-800 cursor-pointer">
-              <strong>Aplicar log internamente</strong> — El backend toma log(Y) antes de ajustar
-              y corrige el sesgo al pronosticar (estimador de Duan).
-              <TooltipIcon text="Útil cuando la serie tiene varianza multiplicativa pero no la transformaste manualmente en el paso 3. Los pronósticos se devuelven a escala original corregidos por el factor de Duan." />
-            </label>
-          </div>
+          {/* Corrección log INTERNA — solo visible si NO hay log externo */}
+          {/* Si el usuario ya aplicó log(x) en paso 3, este checkbox causaría   */}
+          {/* un doble-log (log de log), que se deshabilita aquí por coherencia. */}
+          {!hasExternalLog && !hasExternalSqrt && !hasExternalDiff && (
+            <div className="mb-5 flex items-start gap-3 p-3 bg-purple-50 border border-purple-200 rounded-xl">
+              <input type="checkbox" id="transformLog"
+                checked={modelParams.transformLog}
+                onChange={(e) => setModelParams({ transformLog: e.target.checked })}
+                className="mt-0.5" />
+              <label htmlFor="transformLog" className="text-sm text-purple-800 cursor-pointer">
+                <strong>Aplicar log internamente</strong> — El backend toma log(Y) antes de ajustar
+                y aplica corrección de sesgo de Duan al pronosticar.
+                <TooltipIcon text="Útil cuando la serie tiene varianza multiplicativa pero NO la transformaste en el paso 3. Los pronósticos se devuelven a escala original multiplicados por el factor de Duan: E[exp(Ẑ + ε)] = exp(Ẑ) · mean(exp(êᵢ))." />
+              </label>
+            </div>
+          )}
+
+          {/* Nota informativa cuando hay log externo y el checkbox está oculto */}
+          {hasExternalLog && (
+            <div className="mb-5 p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-800">
+              <strong>Back-transform automático activado:</strong> La serie ya está en escala log — el
+              ajuste opera en log-escala y el back-transform exp() + corrección de Duan se aplica
+              automáticamente en pronósticos. No es necesario activar ningún checkbox adicional.
+            </div>
+          )}
         </>
       )}
 
@@ -435,6 +659,13 @@ export default function ModelPage() {
           ? <><span className="animate-spin inline-block">⚙️</span> Ajustando modelo…</>
           : fittedModel ? '↺ Re-ajustar con nueva configuración' : '▶ Ajustar modelo →'}
       </button>
+
+      {/* Hint pedagógico antes de ver resultados */}
+      {!fittedModel && !loading && (
+        <p className="text-xs text-stone-400 mt-2">
+          💡 Tras ajustar, revisa los diagnósticos de residuales para validar que el modelo captura correctamente la estructura de la serie.
+        </p>
+      )}
 
       {/* ── Resultados ── */}
       {fittedModel && <ModelResults model={fittedModel} />}

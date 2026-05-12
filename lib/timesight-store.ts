@@ -43,6 +43,12 @@ export type ModelFamily = 'polynomial' | 'log' | 'exponential' | 'arima' | 'ets'
 export interface ModelParams {
   family: ModelFamily; degree: number
   seasonal: 'none' | 'dummy' | 'fourier'; harmonics: number; transformLog: boolean
+  externalTransform?: string  // 'none' | 'log' | 'sqrt' | 'diff' | 'logdiff'
+}
+
+export interface ArimaOrder {
+  p: number; d: number; q: number
+  P?: number; D?: number; Q?: number; S?: number
 }
 
 export interface FittedModel {
@@ -50,6 +56,8 @@ export interface FittedModel {
   equation: string; aic: number; bic: number; rmse: number; mape: number
   coefficients: Record<string, number>; pvalues: Record<string, number>
   fitted: number[]; residuals: number[]; smearingFactor?: number
+  scaleNote?: string   // Descripción de la escala de los valores ajustados/residuales
+  arimaOrder?: ArimaOrder  // Solo para modelos ARIMA
 }
 
 export interface DiagTest {
@@ -66,6 +74,7 @@ export interface ForecastResult {
   forecast: number[]; lower80: number[]; upper80: number[]
   lower95: number[]; upper95: number[]
   horizon: number; method: BiasCorrection; smearingFactor: number; plots: string[]
+  scaleNote?: string  // Descripción de la escala de los pronósticos
 }
 
 export interface TransformResult {
@@ -163,7 +172,6 @@ export const timeSightStore = {
 
 export function useTimeSightStore(): AnalysisState & typeof timeSightStore {
   const [, forceRender] = useState(0)
-
   useEffect(() => {
     const fn = () => forceRender(n => n + 1)
     _listeners.add(fn)
