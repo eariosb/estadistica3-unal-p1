@@ -78,6 +78,7 @@ bash
 docker build -t timesight .
 docker run -p 3000:3000 timesight
 🧪 Características destacadas
+
 Ejecución real de R en cada módulo: todos los ejemplos de regresión, ACF, tests de hipótesis y pronósticos se pueden ejecutar, modificar y volver a lanzar sin salir de la lección.
 
 Gráficos anotados automáticamente: picos estacionales en el ACF, heterocedasticidad en residuos, resultados de tests expresados visualmente y con lenguaje natural.

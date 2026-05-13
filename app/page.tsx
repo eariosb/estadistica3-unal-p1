@@ -20,7 +20,7 @@ export default function Home() {
           Tendencia, Estacionalidad y Ajustes Locales
         </p>
         <p className="text-base text-stone-600 leading-relaxed max-w-2xl mb-8">
-          Curso completo basado en las notas de clase de la{" "}
+          Curso inicial basado en las notas de clase de la{" "}
           <strong className="text-stone-800">Profesora Nelfi González</strong>{" "}
           (Universidad Nacional de Colombia), complementado con referencias
           clásicas y código R reproducible para cada ejemplo.
@@ -29,10 +29,10 @@ export default function Home() {
         {/* Feature pills */}
         <div className="flex flex-wrap gap-3">
           {[
-            { icon: BookOpen, label: "7 módulos estructurados" },
-            { icon: Code2, label: "Código R listo para copiar" },
-            { icon: TrendingUp, label: "Ejemplos con datos reales" },
-            { icon: GraduationCap, label: "Rigor estadístico didáctico" },
+            { icon: BookOpen, label: "8 módulos estructurados" },
+            { icon: Code2, label: "Código R listo para copiar y/o ejecutar" },
+            { icon: TrendingUp, label: "Ejemplos aplicados" },
+            { icon: GraduationCap, label: "TimeSight: app de análisis de series de tiempo" },
           ].map(({ icon: Icon, label }) => (
             <div
               key={label}
