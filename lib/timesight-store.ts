@@ -38,7 +38,7 @@ export interface ExploreResult {
   plots: string[]
 }
 
-export type ModelFamily = 'polynomial' | 'log' | 'exponential' | 'arima' | 'ets'
+export type ModelFamily = 'polynomial' | 'log' | 'exponential' | 'arima' | 'ets' | 'mixed'
 
 export interface ModelParams {
   family: ModelFamily; degree: number

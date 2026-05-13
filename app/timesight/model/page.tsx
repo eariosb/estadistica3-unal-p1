@@ -475,7 +475,7 @@ export default function ModelPage() {
   // reset preventivo a polynomial para evitar double-log silencioso.
   // (Se hace en render, no en store, para no corromper estado guardado)
   const safeFamily: ModelFamily =
-    hasExternalLog && (modelParams.family === 'log' || modelParams.family === 'exponential')
+    (hasExternalLog || hasExternalDiff) && (modelParams.family === 'log' || modelParams.family === 'exponential')
       ? 'polynomial'
       : modelParams.family
 
@@ -517,20 +517,30 @@ export default function ModelPage() {
       tooltip: 'Tendencia capturada por un polinomio en el tiempo. Grado 1 = lineal, 2 = cuadrática, 3 = cúbica. Funciona sobre cualquier escala de datos.',
     },
     {
-      id: 'log', label: 'Log-lineal', desc: 'log(Ŷ) = β₀ + β₁t + ε',
+      id: 'log', label: 'Log-Polinomial', desc: 'log(Ŷ) = β₀ + β₁t + β₂t² + … + ε',
       tooltip: hasExternalLog
         ? 'DESHABILITADO: la serie ya fue transformada con log en el paso 3. Aplicar log de nuevo modelaría log(log(Y)), lo cual no tiene sentido estadístico. Usa Polinomial o ARIMA sobre la serie ya en log-escala.'
-        : 'El logaritmo estabiliza varianza multiplicativa. Ideal cuando la serie crece proporcionalmente. Se aplica corrección de sesgo de Duan al pronosticar. Equivalente a ajustar una curva exponencial en escala original.',
-      disabled: hasExternalLog,
-      disabledReason: 'Redundante: la serie ya está en log-escala',
+        : 'Aplica log(Y) antes del ajuste para estabilizar varianza multiplicativa. El modelo polinomial se ajusta en escala log; los pronósticos se devuelven a escala original con corrección de sesgo de Duan. Ideal cuando la serie crece de forma exponencial o con varianza proporcional a la media.',
+      disabled: hasExternalLog || hasExternalDiff,
+      disabledReason: hasExternalDiff
+        ? 'No recomendado: la serie diferenciada puede contener valores negativos incompatibles con log'
+        : 'Redundante: la serie ya está en log-escala',
     },
     {
       id: 'exponential', label: 'Exponencial', desc: 'Ŷ = a · e^(bt)',
-      tooltip: hasExternalLog
-        ? 'DESHABILITADO: la serie ya fue transformada con log. Aplicar exponencial internamente haría log(log(Y)).'
-        : 'Crecimiento o decaimiento exponencial puro. Internamente aplica log(Y) ~ t. Si la serie ya fue transformada externamente, este modelo es redundante.',
-      disabled: hasExternalLog,
-      disabledReason: 'Redundante: la serie ya está en log-escala',
+      tooltip: hasExternalLog || hasExternalDiff
+        ? 'DESHABILITADO: no aplicable a series ya en log-escala o diferenciadas (las diferencias pueden ser negativas).'
+        : 'Crecimiento o decaimiento exponencial puro. Internamente aplica log(Y) ~ t y después exponencia los pronósticos. Requiere valores estrictamente positivos.',
+      disabled: hasExternalLog || hasExternalDiff,
+      disabledReason: hasExternalDiff
+        ? 'No aplicable: la serie diferenciada puede contener valores negativos o cero'
+        : 'Redundante: la serie ya está en log-escala',
+    },
+    {
+      id: 'mixed', label: 'Modelo Mixto', desc: 'Ŷ = T(t)·[1 + S(t)] + ε',
+      tooltip: hasExternalLog || hasExternalDiff
+        ? 'Disponible con serie en escala original o sqrt. El modelo mixto ajusta T(t)×[1+S(t)]+ε por mínimos cuadrados no lineales (nlsLM), ideal para estacionalidad cuya amplitud crece con la tendencia (componente parcialmente multiplicativa).'
+        : 'Modelo parcialmente multiplicativo: la amplitud estacional escala con la tendencia, pero el error es aditivo. Ajuste por nlsLM (Levenberg-Marquardt). Ideal cuando en el gráfico de la serie la varianza estacional crece proporcionalmente al nivel.',
     },
     {
       id: 'arima', label: 'ARIMA automático', desc: 'auto.arima() · selección por AIC',
@@ -604,12 +614,20 @@ export default function ModelPage() {
       {/* ── Opciones adicionales (solo si no es ARIMA) ── */}
       {!isArima && (
         <>
-          {/* Grado polinomial */}
-          {safeFamily === 'polynomial' && (
+          {/* Grado polinomial / log-polinomial / mixto */}
+          {(safeFamily === 'polynomial' || safeFamily === 'log' || safeFamily === 'mixed') && (
             <div className="mb-5">
               <h2 className="text-sm font-semibold text-stone-700 mb-2">
-                Grado del polinomio
-                <TooltipIcon text="Grado 1 = línea recta, 2 = parábola, 3 = cúbica. Evita grados > 4: el modelo sobreajusta la muestra y pronostica mal fuera de la muestra." />
+                {safeFamily === 'log' ? 'Grado del polinomio en log-escala'
+                  : safeFamily === 'mixed' ? 'Grado del polinomio de tendencia'
+                  : 'Grado del polinomio'}
+                <TooltipIcon text={
+                  safeFamily === 'log'
+                    ? 'Grado 1 = log-lineal clásico, 2 = log-cuadrático, etc. El ajuste se hace sobre log(Y) y los pronósticos se devuelven con exp() + corrección de Duan.'
+                    : safeFamily === 'mixed'
+                    ? 'Grado de la tendencia T(t) dentro del modelo mixto Y = T(t)×[1+S(t)]+ε. Grado 1 = tendencia lineal, 2 = cuadrática.'
+                    : 'Grado 1 = línea recta, 2 = parábola, 3 = cúbica. Evita grados > 4: el modelo sobreajusta la muestra y pronostica mal fuera de la muestra.'
+                } />
               </h2>
               <div className="flex gap-2">
                 {[1, 2, 3, 4].map((d) => (
@@ -706,7 +724,6 @@ export default function ModelPage() {
 
       {!fittedModel && !loading && (
         <p className="text-xs text-stone-400 mt-2">
-          💡 Tras ajustar, revisa los diagnósticos de residuales para validar que el modelo captura correctamente la estructura de la serie.
           💡 Tras ajustar, revisa los diagnósticos de residuales para validar que el modelo captura correctamente la estructura de la serie.
         </p>
       )}

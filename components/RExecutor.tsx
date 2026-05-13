@@ -536,7 +536,7 @@ export function RExecutor({ code: originalCode, title, packages, caption }: RExe
         {/* Caption */}
         {caption && (
           <div className="bg-slate-900 px-4 py-2 border-t border-slate-700">
-            <p className="text-slate-300 text-xs italic">{caption}</p>
+            <p className="text-xs italic" style={{ color: '#bfdbfe' }}>{caption}</p>
           </div>
         )}
       </div>

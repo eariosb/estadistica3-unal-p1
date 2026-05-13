@@ -77,6 +77,21 @@ export function Sidebar() {
           );
         })}
 
+        {/* Manual PDF */}
+        <div className="pt-3 pb-1 px-3">
+          <p className="text-[10px] uppercase tracking-widest font-semibold text-stone-400">
+            Recursos
+          </p>
+        </div>
+        <a
+          href="/Manual_Series_Tiempo.pdf"
+          download
+          className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-stone-600 hover:bg-stone-200 hover:text-stone-900"
+        >
+          <span className="text-base leading-none">📄</span>
+          <span className="leading-snug font-medium">Manual en PDF</span>
+        </a>
+
         {/* Referencias */}
         <div className="pt-3 pb-1 px-3">
           <p className="text-[10px] uppercase tracking-widest font-semibold text-stone-400">

@@ -182,19 +182,19 @@ ts_explore <- function(values, freq, start, name = "Serie") {
         if (freq == 12)     per_labels <- month.abb
         else if (freq == 4) per_labels <- paste0("T", 1:4)
         else                per_labels <- paste0("S", seq_len(freq))
-        par(mar = c(4.5, 4, 3.5, 1), family = "sans")
+        par(mar = c(6, 4, 3.5, 1), family = "sans")
         monthplot(y,
                   labels  = per_labels,
                   col     = "#374151",
                   lwd     = 1.2,
                   col.base = "#1d4ed8",
                   lwd.base = 2.5,
-                  main    = "Subseries por mes — media horizontal = promedio del mes",
+                  main    = "Subseries por período — media horizontal = promedio del período",
                   sub     = "Línea azul: media histórica del período · Pendiente creciente → amplitud aumenta (multiplicativo)",
-                  xlab    = "Mes", ylab = name,
-                  bty     = "l", cex.main = 0.95, cex.sub = 0.78, font.sub = 3)
+                  xlab    = "Período", ylab = name,
+                  bty     = "l", cex.main = 0.95, cex.sub = 0.82, font.sub = 3)
         grid(col = "#e7e5e4", lty = 1)
-      }, width = 820, height = 430)
+      }, width = 820, height = 460)
     }, error = function(e) NULL)
   }
 
@@ -417,6 +417,7 @@ ts_model_fit <- function(values, freq, start, family, degree, seasonal,
   n      <- length(y)
   t_vec  <- seq_len(n)
   freq   <- as.integer(frequency(y))
+  ext    <- external_transform   # alias usado en todos los bloques de familia
 
   # Aplicar log interno
   y_fit <- if (isTRUE(transform_log)) log(y) else y
@@ -431,6 +432,21 @@ ts_model_fit <- function(values, freq, start, family, degree, seasonal,
     }
   } else if (family == "exponential") {
     # se ajusta como log(y) ~ t, luego se exponencia
+    # ── Guardia: no aplicable a series diferenciadas ni a valores ≤ 0
+    if (external_transform %in% c("diff", "logdiff")) {
+      stop(paste0(
+        "El modelo Exponencial no es aplicable a series diferenciadas (diff / logdiff): ",
+        "las diferencias pueden ser negativas o cero, y log(y) produciría NaN. ",
+        "Usa Polinomial grado 1-2 o ARIMA sobre la serie transformada."
+      ))
+    }
+    if (any(as.numeric(y) <= 0, na.rm = TRUE)) {
+      stop(paste0(
+        "El modelo Exponencial requiere valores estrictamente positivos. ",
+        "La serie activa contiene ceros o valores negativos. ",
+        "Aplica una transformación (log, sqrt) o usa el modelo Polinomial."
+      ))
+    }
     y_fit <- log(y)
     X <- cbind(X, t_vec)
   }
@@ -482,20 +498,229 @@ ts_model_fit <- function(values, freq, start, family, degree, seasonal,
 
   colnames(X) <- make.names(col_names, unique = TRUE)
 
+  # ── Modelo Mixto: Y = T(t) × [1 + S(t)] + ε  ────────────────────────────
+  # Componente parcialmente multiplicativa: la estacionalidad escala con la
+  # tendencia (amplitud creciente), pero el residuo es aditivo.
+  # T(t) = β₀ + β₁·t̃ + … + βₚ·t̃ᵖ   (tendencia polinomial en t escalado)
+  # S(t) = Σ [aₖ·sin(2πkt/s) + bₖ·cos(2πkt/s)]  (ondas de Fourier)
+  # ─────────────────────────────────────────────────────────────────────────
+  if (family == "mixed") {
+
+    deg  <- as.integer(degree)
+    K_mx <- if (freq > 1 && seasonal != "none")
+              min(as.integer(harmonics), floor(freq / 2L))
+            else 0L
+
+    # t escalado a [0,1] para mejor condicionamiento numérico
+    t_sc   <- t_vec / n
+    y_vec  <- as.numeric(y_fit)  # usa y_fit (puede tener log interno activo)
+
+    # Matrices de base
+    T_mat <- outer(t_sc, 0:deg, `^`)   # n × (deg+1)
+    if (K_mx > 0L) {
+      sin_mat <- sapply(seq_len(K_mx), function(k) sin(2 * pi * k * t_vec / freq))
+      cos_mat <- sapply(seq_len(K_mx), function(k) cos(2 * pi * k * t_vec / freq))
+      S_mat   <- cbind(sin_mat, cos_mat)   # n × 2K
+    } else {
+      S_mat <- matrix(0, nrow = n, ncol = 0L)
+    }
+
+    np_mix <- (deg + 1L) + 2L * K_mx
+
+    # ── Alternating Least Squares (ALS) ─────────────────────────────────────
+    # El modelo Y = T(t)·[1+S(t)] + ε es bilineal en (β, s):
+    #   • Fijando s → β se estima por OLS sobre T_mat escalado por (1+S_v).
+    #   • Fijando β → s se estima por OLS de (Y−T_v) sobre T_v·S_mat.
+    # Converge sin necesitar paquetes externos.
+    als_mixed <- function(T_mat, S_mat, y_vec,
+                          max_iter = 600L, tol = 1e-12) {
+      nn  <- length(y_vec)
+      K2  <- ncol(S_mat)
+
+      # Inicializar β con OLS simple sobre tendencia
+      b <- tryCatch(
+        as.numeric(solve(crossprod(T_mat), crossprod(T_mat, y_vec))),
+        error = function(e) c(mean(y_vec, na.rm = TRUE), rep(0, ncol(T_mat) - 1L))
+      )
+      if (any(!is.finite(b))) b <- c(mean(y_vec, na.rm = TRUE), rep(0, ncol(T_mat) - 1L))
+      s <- rep(0, K2)
+
+      prev_ssr <- Inf
+      for (iter in seq_len(max_iter)) {
+        # Paso 1: fijar s → resolver β por OLS
+        S_v   <- if (K2 > 0L) as.vector(S_mat %*% s) else rep(0, nn)
+        w     <- 1 + S_v
+        T_sc  <- T_mat * w            # escala cada fila de T_mat por w[i]
+        AtA   <- crossprod(T_sc)
+        Aty   <- crossprod(T_sc, y_vec)
+        b_new <- tryCatch(as.numeric(solve(AtA, Aty)), error = function(e) b)
+        if (any(!is.finite(b_new))) b_new <- b
+        b <- b_new
+
+        # Paso 2: fijar β → resolver s por OLS
+        T_v <- as.vector(T_mat %*% b)
+        if (K2 > 0L) {
+          TS_mat <- S_mat * T_v         # T_v[i] · S_mat[i,] para cada fila
+          resid  <- y_vec - T_v
+          AtA2   <- crossprod(TS_mat)
+          Aty2   <- crossprod(TS_mat, resid)
+          s_new  <- tryCatch(as.numeric(solve(AtA2, Aty2)), error = function(e) s)
+          if (any(!is.finite(s_new))) s_new <- s
+          s <- s_new
+        }
+
+        # Convergencia por SSR relativa
+        S_v2   <- if (K2 > 0L) as.vector(S_mat %*% s) else rep(0, nn)
+        fitted <- as.vector(T_mat %*% b) * (1 + S_v2)
+        ssr    <- sum((y_vec - fitted)^2)
+        if (abs(prev_ssr - ssr) < tol * (1 + abs(ssr))) break
+        prev_ssr <- ssr
+      }
+
+      S_v_f  <- if (K2 > 0L) as.vector(S_mat %*% s) else rep(0, nn)
+      fitted <- as.vector(T_mat %*% b) * (1 + S_v_f)
+      resids <- y_vec - fitted
+      list(par = c(b, s), fitted = fitted, fvec = resids)
+    }
+
+    fit_mx <- tryCatch(
+      als_mixed(T_mat, S_mat, y_vec),
+      error = function(e) stop(paste0("Modelo Mixto (ALS) no convergió: ",
+                                       conditionMessage(e),
+                                       ". Prueba reducir el grado o los armónicos."))
+    )
+
+    par_est      <- fit_mx$par
+    fitted_mx    <- fit_mx$fitted
+    resids_mx    <- fit_mx$fvec
+    npar_mx      <- np_mix
+
+    # Back-transform si aplica (log interno o externo)
+    smearing_factor <- 1
+    if (ext == "log") {
+      Y_orig_vals  <- exp(as.numeric(y))
+      smearing_factor <- mean(exp(resids_mx))
+      fitted_orig  <- exp(fitted_mx) * smearing_factor
+      resids_orig  <- Y_orig_vals - fitted_orig
+    } else if (ext == "sqrt") {
+      fitted_orig  <- fitted_mx^2
+      resids_orig  <- as.numeric(y)^2 - fitted_orig
+    } else if (ext %in% c("diff", "logdiff")) {
+      fitted_orig  <- fitted_mx
+      resids_orig  <- resids_mx
+    } else if (isTRUE(transform_log)) {
+      smearing_factor <- mean(exp(resids_mx))
+      fitted_orig  <- exp(fitted_mx) * smearing_factor
+      resids_orig  <- as.numeric(y) - fitted_orig
+    } else {
+      fitted_orig  <- fitted_mx
+      resids_orig  <- resids_mx
+    }
+
+    mse_mx   <- mean(resids_orig^2, na.rm = TRUE)
+    aic_mx   <- n * log(mse_mx) + 2 * npar_mx
+    bic_mx   <- n * log(mse_mx) + npar_mx * log(n)
+    rmse_mx  <- sqrt(mse_mx)
+    y_ref_mx <- if (ext == "log") exp(as.numeric(y)) else
+                if (ext == "sqrt") as.numeric(y)^2 else as.numeric(y)
+    mape_mx  <- mean(abs(resids_orig / y_ref_mx) * 100, na.rm = TRUE)
+    if (!is.finite(mape_mx)) mape_mx <- NA_real_
+
+    # Nombres de parámetros
+    par_names <- c(paste0("beta", 0:deg),
+                   if (K_mx > 0) c(paste0("a", seq_len(K_mx)), paste0("b", seq_len(K_mx))) else character(0))
+
+    eq_mx <- paste0(
+      "Y_t = (", paste(sprintf("%.4f·t̃^%d", par_est[seq_len(deg+1)], 0:deg), collapse = " + "), ")",
+      if (K_mx > 0) " × [1 + Σ(aₖsin + bₖcos)]" else "",
+      " + ε"
+    )
+
+    scale_note_mx <- switch(ext,
+      log     = "Pronósticos en escala ORIGINAL (back-transform exp() + corrección de Duan).",
+      sqrt    = "Pronósticos en escala ORIGINAL (back-transform cuadrático).",
+      diff    = "⚠️ Valores ajustados en escala de PRIMERAS DIFERENCIAS.",
+      logdiff = "⚠️ Valores ajustados en escala de DIFERENCIAS DE LOG.",
+      "Modelo Mixto ajustado en escala original de la serie activa."
+    )
+
+    return(list(
+      name           = paste0("Mixto grado ", deg,
+                               if (K_mx > 0) paste0(" + ", K_mx, " armónicos") else ""),
+      family         = "mixed",
+      equation       = eq_mx,
+      aic            = aic_mx,
+      bic            = bic_mx,
+      rmse           = rmse_mx,
+      mape           = mape_mx,
+      coefficients   = setNames(as.list(par_est), par_names),
+      pvalues        = setNames(as.list(rep(NA_real_, npar_mx)), par_names),
+      fitted         = as.list(fitted_orig),
+      residuals      = as.list(resids_orig),
+      smearingFactor = smearing_factor,
+      scaleNote      = scale_note_mx,
+      params         = list(
+        family            = "mixed",
+        degree            = deg,
+        seasonal          = seasonal,
+        harmonics         = as.integer(harmonics),
+        transformLog      = isTRUE(transform_log),
+        externalTransform = ext
+      )
+    ))
+  }
+
   # ── Ajuste ARIMA automático ───────────────────────────────────────────────
   if (family == "arima") {
     m <- tryCatch(
       forecast::auto.arima(y, seasonal = (freq > 1), stepwise = TRUE, approximation = TRUE),
       error = function(e) stop(paste0("auto.arima falló: ", conditionMessage(e)))
     )
-    fitted_vals <- as.numeric(fitted(m))
-    resids      <- as.numeric(residuals(m))
-    smearing    <- mean(exp(resids))  # para log si aplica
 
-    aic_val  <- AIC(m)
-    bic_val  <- BIC(m)
-    rmse_val <- sqrt(mean(resids^2))
-    mape_val <- mean(abs(resids / y[!is.na(y)]) * 100, na.rm = TRUE)
+    fitted_active <- as.numeric(fitted(m))      # escala de la serie activa (puede ser log)
+    resids_active <- as.numeric(residuals(m))   # ídem
+
+    aic_val <- AIC(m)
+    bic_val <- BIC(m)
+
+    # ── Back-transform al escala original ────────────────────────────────────
+    # fitted(m) y residuals(m) están en la misma escala que `y` (= serie activa,
+    # que puede ser log(Y_orig) si el usuario aplicó log en el paso 3).
+    # Aplicamos aquí el back-transform para que ts_backtransform reciba siempre
+    # valores en escala original, igual que los modelos de regresión.
+    smearing <- 1
+
+    if (ext == "log") {
+      # y está en log-escala → y_orig = exp(y)
+      y_orig_vals  <- exp(as.numeric(y))
+      smearing     <- mean(exp(resids_active), na.rm = TRUE)
+      fitted_orig  <- exp(fitted_active) * smearing
+      resids_orig  <- y_orig_vals - fitted_orig
+
+    } else if (ext == "sqrt") {
+      y_orig_vals  <- as.numeric(y)^2
+      fitted_orig  <- fitted_active^2
+      resids_orig  <- y_orig_vals - fitted_orig
+
+    } else if (ext %in% c("diff", "logdiff")) {
+      # Para series diferenciadas: fitted en escala de diferencias
+      # La reconstrucción de niveles la hace ts_backtransform;
+      # devolvemos los fitted en escala activa (diferencias)
+      fitted_orig  <- fitted_active
+      resids_orig  <- resids_active
+
+    } else {
+      # Sin transformación externa: fitted ya en escala original
+      fitted_orig  <- fitted_active
+      resids_orig  <- resids_active
+    }
+
+    # ── Métricas en escala original (coherentes con el gráfico de ajuste) ────
+    rmse_val <- sqrt(mean(resids_orig^2, na.rm = TRUE))
+    y_ref    <- if (ext == "log")  exp(as.numeric(y)) else
+                if (ext == "sqrt") as.numeric(y)^2    else
+                as.numeric(y)
+    mape_val <- mean(abs(resids_orig / y_ref) * 100, na.rm = TRUE)
     if (!is.finite(mape_val)) mape_val <- NA_real_
 
     ord <- arimaorder(m)
@@ -509,15 +734,21 @@ ts_model_fit <- function(values, freq, start, family, degree, seasonal,
       arimaOrder   = as.list(ord),
       aic          = aic_val,
       bic          = bic_val,
-      rmse         = rmse_val,
-      mape         = mape_val,
+      rmse         = rmse_val,             # en escala original
+      mape         = mape_val,             # en escala original
       coefficients = as.list(coef(m)),
       pvalues      = as.list(rep(NA_real_, length(coef(m)))),
-      fitted       = fitted_vals,
-      residuals    = resids,
+      fitted       = as.list(fitted_orig),   # SIEMPRE en escala original
+      residuals    = as.list(resids_orig),   # SIEMPRE en escala original
       smearingFactor = smearing,
+      scaleNote    = if (ext %in% c("log","sqrt"))
+                       paste0("Valores ajustados en escala ORIGINAL (back-transform aplicado).")
+                     else if (ext %in% c("diff","logdiff"))
+                       paste0("⚠️ Valores ajustados en escala de diferencias. Reconstrucción en Paso 5.")
+                     else "Valores ajustados en escala original de la serie.",
       params       = list(family = "arima", degree = 0, seasonal = "none",
-                          harmonics = 0, transformLog = FALSE)
+                          harmonics = 0, transformLog = FALSE,
+                          externalTransform = ext)
     ))
   }
 
@@ -607,7 +838,7 @@ ts_model_fit <- function(values, freq, start, family, degree, seasonal,
 
   # Nombre del modelo
   model_name <- paste0(
-    switch(family, polynomial = "Polinomial", log = "Log-lineal", exponential = "Exponencial"),
+    switch(family, polynomial = "Polinomial", log = "Log-Polinomial", exponential = "Exponencial", mixed = "Mixto"),
     " grado ", degree,
     if (seasonal != "none") paste0(" + Estacional (", seasonal, ")") else ""
   )
@@ -1359,7 +1590,7 @@ ts_backtransform <- function(values_orig, values_active, freq, start,
   # ── Fórmula de back-transform ──────────────────────────────────────────────
   backtransform_formula <- switch(ext,
     log     = paste0("Ŷ_original = exp(Ŷ_log)",
-                     if (smearing_factor != 1 && family != "arima")
+                     if (smearing_factor != 1)
                        paste0(" × ", round(smearing_factor, 4), " (corrección de Duan)")
                      else ""),
     sqrt    = "Ŷ_original = (Ŷ_sqrt)²",
@@ -1372,10 +1603,22 @@ ts_backtransform <- function(values_orig, values_active, freq, start,
   )
 
   # ── Back-transform de los valores ajustados ────────────────────────────────
-  # Para regresión y ETS: fitted_vals ya vienen en escala original desde el backend.
-  # Para ARIMA con transformación externa: fitted_vals están en escala transformada.
-  # Aquí siempre mostramos los valores tal como vienen (ya back-transformados).
+  # Para log/sqrt/none: fitted_vals ya vienen en escala original desde ts_model_fit().
+  # Para diff/logdiff: fitted_vals están en escala de diferencias → hay que reconstruir
+  #   los niveles originales encadenando desde el primer valor observado.
   fitted_orig <- as.numeric(fitted_vals)
+
+  if (ext == "diff") {
+    # Reconstrucción: Y_t = Y_{t0} + cumsum(Δ̂Y)
+    # La serie activa es diff(Y_orig) → longitud = n_orig - 1
+    # El primer valor de Y_orig sirve como punto de partida
+    y0 <- as.numeric(yt_orig)[1]
+    fitted_orig <- c(y0, y0 + cumsum(fitted_orig))
+  } else if (ext == "logdiff") {
+    # Reconstrucción: Y_t = Y_{t0} × cumprod(exp(Δ̂log Y))
+    y0 <- as.numeric(yt_orig)[1]
+    fitted_orig <- c(y0, y0 * cumprod(exp(fitted_orig)))
+  }
 
   # Recortar longitud por seguridad
   n_fit <- min(length(fitted_orig), n)

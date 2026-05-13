@@ -446,7 +446,7 @@ export default function ExplorePage() {
               <div className="p-3 bg-violet-50 border border-violet-200 rounded-xl text-xs text-violet-800 leading-relaxed">
                 <strong>Cómo leer estos gráficos:</strong>{' '}
                 En el <em>patrón por año</em>, si las líneas de años recientes están mucho más separadas → amplitud creciente → modelo <strong>multiplicativo</strong> (usar log).
-                En el <em>subseries</em>, si la línea de cada mes sube con pendiente pronunciada → el promedio de ese mes crece → confirma multiplicativo.
+                En el <em>subseries</em>, si la línea de cada período sube con pendiente pronunciada → el promedio de ese período crece → confirma multiplicativo.
                 Si las líneas son paralelas y planas → modelo <strong>aditivo</strong>.
               </div>
               <div>
@@ -462,7 +462,7 @@ export default function ExplorePage() {
                     Subseries — evolución histórica de cada período
                   </p>
                   <RPlot b64={r.plots[4]} alt="Subseries plot"
-                    caption="Cada panel = un mes. La línea azul horizontal es el promedio histórico. Si la secuencia de puntos sube → el promedio de ese mes crece con el tiempo." />
+                    caption="Cada panel = un período. La línea azul horizontal es el promedio histórico. Si la secuencia de puntos sube → el promedio de ese período crece con el tiempo." />
                 </div>
               )}
             </div>

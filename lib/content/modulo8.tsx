@@ -1222,6 +1222,35 @@ invisible(lapply(paquetes_curso, library, character.only = TRUE))`}
           de la tabla anterior para la acción correctiva.
         </p>
       </Callout>
+
+      {/* ── Descarga del Manual ──────────────────────────────────────────── */}
+      <div className="mt-8 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl shadow-sm">
+        <div className="flex items-start gap-4">
+          <div className="text-3xl shrink-0">📘</div>
+          <div className="flex-1">
+            <h3 className="font-bold text-blue-900 text-base mb-1">
+              Manual práctico de Series de Tiempo
+            </h3>
+            <p className="text-sm text-blue-700 mb-3 leading-relaxed">
+              Guía de referencia rápida con heurísticas visuales para identificar tendencia,
+              estacionalidad, componentes aditivas, multiplicativas y parcialmente
+              multiplicativas. Incluye el filtro de Henderson, la prueba de amplitud y
+              un árbol de decisión para elegir el modelo correcto.
+            </p>
+            <a
+              href="/Manual_Series_Tiempo.pdf"
+              download="Manual_Series_Tiempo.pdf"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-700 text-white text-sm font-semibold 
+              rounded-lg hover:bg-blue-300 bg-blue-500 transition-colors shadow-sm"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+              Descargar Manual (PDF)
+            </a>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
