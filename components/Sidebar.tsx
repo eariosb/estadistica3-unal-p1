@@ -91,6 +91,14 @@ export function Sidebar() {
           <span className="text-base leading-none">📄</span>
           <span className="leading-snug font-medium">Manual en PDF</span>
         </a>
+        <a
+          href="/Guia_Comparacion_Modelos.pdf"
+          download
+          className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-stone-600 hover:bg-stone-200 hover:text-stone-900"
+        >
+          <span className="text-base leading-none">📊</span>
+          <span className="leading-snug font-medium">Guía de modelos</span>
+        </a>
 
         {/* Referencias */}
         <div className="pt-3 pb-1 px-3">
