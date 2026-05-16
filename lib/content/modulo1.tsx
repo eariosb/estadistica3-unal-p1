@@ -168,32 +168,69 @@ export function Modulo1Content() {
       <p>
         Cuando la <strong>amplitud estacional crece</strong> proporcionalmente
         con el nivel de la serie (caso típico: ventas, producción industrial,
-        pasajeros aéreos):
+        pasajeros aéreos), el modelo correcto es:
       </p>
-      <D math="Y_t = T_t \times S_t \times E_t" />
+      <D math="Y_t = T_t \times S_t \times \exp(\varepsilon_t), \quad \varepsilon_t \overset{\text{iid}}{\sim} N(0,\,\sigma^2)" />
       <p>
-        Tomando logaritmo natural se obtiene un modelo aditivo equivalente en
-        escala log, lo que permite usar todos los métodos de regresión lineal:
+        El término <M math="\exp(\varepsilon_t)" /> es el factor de error
+        multiplicativo: siempre positivo, y con valor neutro exactamente 1 cuando{" "}
+        <M math="\varepsilon_t = 0" /> (su media). Esto garantiza que{" "}
+        <M math="T_t" /> y <M math="S_t" /> representen el nivel estructural de
+        la serie sin ningún sesgo adicional: cuando no hay perturbación aleatoria,{" "}
+        <M math="Y_t = T_t \times S_t" /> exactamente.
       </p>
-      <D math="\log(Y_t) = T_t^* + S_t^* + E_t^*, \quad \text{donde } T_t^* = \log(T_t),\; S_t^* = \log(S_t)" />
+
+      <Callout type="warning" title="¿Por qué no escribir simplemente Y_t = T_t × S_t × E_t?">
+        <p>
+          Una notación muy frecuente usa un error multiplicativo genérico{" "}
+          <M math="E_t" /> sin especificar su distribución. El problema: para que{" "}
+          <M math="T_t" /> represente el nivel esperado de la serie,{" "}
+          necesitaríamos <M math="\mathbb{E}[E_t] = 1" />. Pero si además
+          asumimos que <M math="\ln(E_t) \sim N(0, \sigma^2)" /> —como
+          exige el modelo lineal en log—, entonces{" "}
+          <M math="E_t \sim \text{LogNormal}(0,\sigma^2)" /> y su media es{" "}
+          <M math="e^{\sigma^2/2} \neq 1" />. Las dos condiciones no pueden
+          satisfacerse simultáneamente. La formulación con{" "}
+          <M math="\exp(\varepsilon_t)" /> resuelve esta ambigüedad declarando
+          desde el principio que el error gaussiano está en escala logarítmica.
+        </p>
+      </Callout>
+
+      <p>
+        Tomando logaritmo natural de ambos lados se obtiene{" "}
+        <strong>directamente</strong> un modelo lineal aditivo estándar:
+      </p>
+      <D math="\ln(Y_t) = \underbrace{\ln(T_t)}_{T_t^*} + \underbrace{\ln(S_t)}_{S_t^*} + \varepsilon_t" />
+      <p>
+        Nótese que el error <M math="\varepsilon_t" /> aparece solo —sin
+        transformar— en la ecuación log. No hay ambigüedad: es un error aditivo
+        gaussiano con media cero, exactamente lo que requieren los métodos de
+        regresión lineal. Bajo este modelo, la serie en escala log es{" "}
+        <M math="Y_t^* = T_t^* + S_t^* + \varepsilon_t" />, y se puede
+        estimar por mínimos cuadrados con todas las herramientas habituales.
+      </p>
 
       <Callout type="formula" title="⚠️ Corrección por sesgo al volver a escala original">
         <p>
-          Al tomar <M math="\log(Y_t)" /> y ajustar el modelo, las predicciones
-          quedan en escala logarítmica. Para volver a la escala original{" "}
-          <strong>no basta con</strong> aplicar <M math="\exp(\hat{y}^*)" />.
-          El operador de esperanza es no lineal:{" "}
-          <M math="E[\exp(X)] \neq \exp(E[X])" /> cuando <M math="X" /> es
-          normal. La corrección correcta —conocida como{" "}
-          <strong>corrección de Duan</strong> o <em>smearing estimator</em>—
-          es:
+          Una vez ajustado el modelo, la predicción <M math="\hat{Y}_t^*" />{" "}
+          está en escala log. Aplicar <M math="\exp(\hat{Y}_t^*)" /> de forma
+          directa estima la <strong>mediana</strong> de <M math="Y_t" />, no su{" "}
+          <strong>media</strong>. La razón se obtiene directamente del modelo:
         </p>
-        <D math="\hat{Y}_t = \exp\!\bigl(\widehat{\log Y_t}\bigr) \cdot \exp\!\!\left(\frac{MSE}{2}\right)" />
+        <D math="\mathbb{E}[Y_t \mid T_t, S_t] = T_t \times S_t \times \mathbb{E}[\exp(\varepsilon_t)] = T_t \times S_t \times e^{\sigma^2/2}" />
+        <p className="mt-2">
+          El factor <M math="e^{\sigma^2/2}" /> proviene de la propiedad de la
+          distribución log-normal. Para predecir la <strong>media</strong>, la
+          corrección correcta —conocida como{" "}
+          <strong>corrección de Duan</strong> o <em>smearing estimator</em>— es:
+        </p>
+        <D math="\hat{Y}_t = \exp\!\left(\hat{Y}_t^*\right) \cdot \exp\!\!\left(\frac{\hat{\sigma}^2}{2}\right) = \exp\!\!\left(\hat{Y}_t^* + \frac{\hat{\sigma}^2}{2}\right)" />
         <p className="mt-2 text-sm">
-          El factor <M math="\exp(MSE/2)" /> corrige el sesgo introducido por la
-          transformación. Si <M math="MSE = 0.04" />, el factor es{" "}
+          donde <M math="\hat{\sigma}^2 \approx \text{MSE}" /> es el error
+          cuadrático medio del ajuste en escala log. Si{" "}
+          <M math="\text{MSE} = 0.04" />, el factor es{" "}
           <M math="\exp(0.02) \approx 1.02" />: una corrección del 2%. Si{" "}
-          <M math="MSE = 0.25" />, el factor es{" "}
+          <M math="\text{MSE} = 0.25" />, el factor es{" "}
           <M math="\approx 1.13" />: un 13% —ya no es despreciable. En el
           Módulo 4 verás cómo implementar esto automáticamente en R.
         </p>
